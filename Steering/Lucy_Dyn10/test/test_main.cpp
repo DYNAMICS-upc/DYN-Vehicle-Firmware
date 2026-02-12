@@ -1,26 +1,24 @@
 #include <unity.h>
 
-void setUp(void) {
-    // set stuff up here
+void setUp(void) {}
+void tearDown(void) {}
+
+// Simularemos la lógica del loop()
+bool read_raw_button(int state) {
+    return (state == 0); // LOW = true (pressed)
 }
 
-void tearDown(void) {
-    // clean stuff up here
+void test_button_logic_pressed(void) {
+    TEST_ASSERT_EQUAL(true, read_raw_button(0));
 }
 
-// Un test real (dummy por ahora, pero validará la compilación de test)
-// Simularemos el estado de un LED
-bool led_state = false;
-void toggle_led() { led_state = !led_state; }
-
-void test_led_toggle(void) {
-    led_state = false;
-    toggle_led();
-    TEST_ASSERT_EQUAL(true, led_state);
+void test_button_logic_released(void) {
+    TEST_ASSERT_EQUAL(false, read_raw_button(1));
 }
 
 int main(int argc, char **argv) {
     UNITY_BEGIN();
-    RUN_TEST(test_led_toggle);
+    RUN_TEST(test_button_logic_pressed);
+    RUN_TEST(test_button_logic_released);
     return UNITY_END();
 }
