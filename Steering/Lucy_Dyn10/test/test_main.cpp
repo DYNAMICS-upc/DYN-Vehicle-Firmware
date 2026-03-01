@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "button_driver.h"
+#include "rotary_driver.h"
 
 static int mock_pin_state = 1; // 1 = HIGH, 0 = LOW
 static bool press_called = false;
@@ -53,9 +54,38 @@ void test_debounce_valid_press(void) {
     TEST_ASSERT_TRUE(press_called);
 }
 
+static int rotary_count = 0;
+void on_rotary(int delta) { rotary_count += delta; }
+
+void test_rotary_clockwise(void) {
+    rotary_count = 0;
+    rotary_driver_set_pins(0, 0);
+    rotary_driver_init(3, 4, on_rotary);
+    
+    // Rotate clockwise: A goes HIGH, B is still LOW
+    rotary_driver_set_pins(1, 0);
+    rotary_driver_update();
+    
+    TEST_ASSERT_EQUAL(1, rotary_count);
+}
+
+void test_rotary_counterclockwise(void) {
+    rotary_count = 0;
+    rotary_driver_set_pins(0, 0);
+    rotary_driver_init(3, 4, on_rotary);
+    
+    // Rotate counter-clockwise: A goes HIGH, B is HIGH
+    rotary_driver_set_pins(1, 1);
+    rotary_driver_update();
+    
+    TEST_ASSERT_EQUAL(-1, rotary_count);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_debounce_ignore_noise);
     RUN_TEST(test_debounce_valid_press);
+    RUN_TEST(test_rotary_clockwise);
+    RUN_TEST(test_rotary_counterclockwise);
     return UNITY_END();
 }
