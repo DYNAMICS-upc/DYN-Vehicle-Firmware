@@ -1,0 +1,25 @@
+name: MCU CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install PlatformIO
+      run: pip install platformio
+
+    - name: Linting (MISRA/Cppcheck)
+      run: pio check -d MCU/MCU_FW -e megaatmega2560 --skip-packages --fail-on-defect high
+
+    - name: Build Firmware
+      run: pio run -d MCU/MCU_FW -e megaatmega2560
+
+    - name: Run Unit Tests
+      run: pio test -d MCU/MCU_FW -e native
