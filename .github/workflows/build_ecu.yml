@@ -16,10 +16,10 @@ jobs:
       run: pip install platformio
 
     - name: Linting (MISRA/Cppcheck)
-      run: pio check -d ECU/ECU_FW -e megaatmega2560 --skip-packages --fail-on-defect high
+      run: pio check -d ECU/ECU_FW -e esp32 --skip-packages --fail-on-defect high
 
     - name: Build Firmware
-      run: pio run -d ECU/ECU_FW -e megaatmega2560
+      run: pio run -d ECU/ECU_FW -e esp32
 
     - name: Run Unit Tests
       run: pio test -d ECU/ECU_FW -e native

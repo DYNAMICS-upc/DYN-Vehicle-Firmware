@@ -1,19 +1,15 @@
 #include "fan_driver.h"
 
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-extern void analogWrite(uint8_t pin, int val);
+// Hardware dependencies mapped for ESP32 and native
+#if defined(ESP_PLATFORM)
+// ESP-IDF headers could go here. For the prototype we mock internally.
 #endif
 
 static uint8_t s_pin = 0;
 
-#ifndef ARDUINO
+#if !defined(ESP_PLATFORM)
+// Mocks for native testing
 static uint8_t s_mock_speed = 0;
-void analogWrite(uint8_t pin, int val) {
-    (void)pin;
-    s_mock_speed = (uint8_t)val;
-}
 uint8_t fan_driver_get_mock_speed(void) {
     return s_mock_speed;
 }
@@ -24,6 +20,10 @@ void fan_driver_init(uint8_t pin) {
 }
 
 void fan_driver_set_speed(uint8_t duty_cycle) {
-    // Basic scaling or raw duty cycle output
-    analogWrite(s_pin, duty_cycle);
+#if defined(ESP_PLATFORM)
+    // Prototype: do nothing physically yet
+    (void)duty_cycle;
+#else
+    s_mock_speed = duty_cycle;
+#endif
 }
