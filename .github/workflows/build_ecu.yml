@@ -1,5 +1,13 @@
 name: ECU CI
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'ECU/**'
+      - '.github/workflows/build_ecu.yml'
+  pull_request:
+    paths:
+      - 'ECU/**'
+      - '.github/workflows/build_ecu.yml'
 jobs:
   build:
     runs-on: ubuntu-latest

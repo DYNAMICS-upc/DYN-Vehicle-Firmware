@@ -1,5 +1,13 @@
 name: PDM CI
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'PDM/**'
+      - '.github/workflows/build_pdm.yml'
+  pull_request:
+    paths:
+      - 'PDM/**'
+      - '.github/workflows/build_pdm.yml'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,10 +24,10 @@ jobs:
       run: pip install platformio
 
     - name: Linting (MISRA/Cppcheck)
-      run: pio check -d PDM/PDM_FW -e megaatmega2560 --skip-packages --fail-on-defect high
+      run: pio check -d PDM/PDM_FW -e esp32 --skip-packages --fail-on-defect high
 
     - name: Build Firmware
-      run: pio run -d PDM/PDM_FW -e megaatmega2560
+      run: pio run -d PDM/PDM_FW -e esp32
 
     - name: Run Unit Tests
       run: pio test -d PDM/PDM_FW -e native

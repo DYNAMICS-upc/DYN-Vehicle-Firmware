@@ -1,5 +1,13 @@
 name: MCU CI
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'MCU/**'
+      - '.github/workflows/build_mcu.yml'
+  pull_request:
+    paths:
+      - 'MCU/**'
+      - '.github/workflows/build_mcu.yml'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,10 +24,10 @@ jobs:
       run: pip install platformio
 
     - name: Linting (MISRA/Cppcheck)
-      run: pio check -d MCU/MCU_FW -e megaatmega2560 --skip-packages --fail-on-defect high
+      run: pio check -d MCU/MCU_FW -e esp32 --skip-packages --fail-on-defect high
 
     - name: Build Firmware
-      run: pio run -d MCU/MCU_FW -e megaatmega2560
+      run: pio run -d MCU/MCU_FW -e esp32
 
     - name: Run Unit Tests
       run: pio test -d MCU/MCU_FW -e native

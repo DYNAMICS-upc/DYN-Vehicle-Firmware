@@ -1,5 +1,13 @@
 name: Steering CI
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - 'Steering/**'
+      - '.github/workflows/build_steering.yml'
+  pull_request:
+    paths:
+      - 'Steering/**'
+      - '.github/workflows/build_steering.yml'
 jobs:
   build:
     runs-on: ubuntu-latest
