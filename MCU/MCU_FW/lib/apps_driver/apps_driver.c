@@ -2,7 +2,8 @@
 #include <stddef.h>
 
 #if defined(ESP_PLATFORM)
-// ESP-IDF hardware includes will go here
+#include "esp_adc/adc_oneshot.h"
+static adc_oneshot_unit_handle_t s_adc1_handle;
 #endif
 
 static uint8_t s_pin_main = 0;
@@ -25,6 +26,18 @@ int analogRead(uint8_t pin) {
 void apps_driver_init(uint8_t pin_main, uint8_t pin_sub) {
     s_pin_main = pin_main;
     s_pin_sub = pin_sub;
+#if defined(ESP_PLATFORM)
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = ADC_UNIT_1,
+    };
+    adc_oneshot_new_unit(&init_config, &s_adc1_handle);
+    adc_oneshot_chan_cfg_t config = {
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_12,
+    };
+    adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_6, &config);
+    adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_7, &config);
+#endif
 }
 
 bool apps_driver_read(uint16_t* out_val) {
@@ -33,9 +46,11 @@ bool apps_driver_read(uint16_t* out_val) {
     int val_main = 0;
     int val_sub = 0;
 #if defined(ESP_PLATFORM)
-    // Dummy reads for prototype
-    val_main = 500;
-    val_sub = 250;
+    int raw1 = 0, raw2 = 0;
+    adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_6, &raw1);
+    adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_7, &raw2);
+    val_main = raw1;
+    val_sub = raw2;
 #else
     val_main = analogRead(s_pin_main);
     val_sub = analogRead(s_pin_sub);
