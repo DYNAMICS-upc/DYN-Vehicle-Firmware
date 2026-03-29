@@ -11,6 +11,13 @@ void nextion_driver_init(void) {
 #endif
 }
 
+void nextion_driver_init_dma(void) {
+#ifdef ARDUINO
+    // Configuración DMA (mock para Mega2560, real si se porta a otro MCU)
+    Serial1.begin(115200); // Higher baudrate for DMA
+#endif
+}
+
 void nextion_driver_send_cmd(const char* cmd) {
     if (!cmd) return;
 #ifdef ARDUINO
