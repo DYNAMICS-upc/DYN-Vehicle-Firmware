@@ -3,7 +3,7 @@
 
 #if defined(ESP_PLATFORM)
 #include "esp_adc/adc_oneshot.h"
-static adc_oneshot_unit_handle_t s_adc1_handle;
+adc_oneshot_unit_handle_t g_adc1_handle = NULL;
 #endif
 
 static uint8_t s_pin_main = 0;
@@ -30,13 +30,13 @@ void apps_driver_init(uint8_t pin_main, uint8_t pin_sub) {
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
     };
-    adc_oneshot_new_unit(&init_config, &s_adc1_handle);
+    adc_oneshot_new_unit(&init_config, &g_adc1_handle);
     adc_oneshot_chan_cfg_t config = {
         .bitwidth = ADC_BITWIDTH_DEFAULT,
         .atten = ADC_ATTEN_DB_12,
     };
-    adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_6, &config);
-    adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_7, &config);
+    adc_oneshot_config_channel(g_adc1_handle, ADC_CHANNEL_6, &config);
+    adc_oneshot_config_channel(g_adc1_handle, ADC_CHANNEL_7, &config);
 #endif
 }
 
@@ -47,8 +47,10 @@ bool apps_driver_read(uint16_t* out_val) {
     int val_sub = 0;
 #if defined(ESP_PLATFORM)
     int raw1 = 0, raw2 = 0;
-    adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_6, &raw1);
-    adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_7, &raw2);
+    if (g_adc1_handle != NULL) {
+        adc_oneshot_read(g_adc1_handle, ADC_CHANNEL_6, &raw1);
+        adc_oneshot_read(g_adc1_handle, ADC_CHANNEL_7, &raw2);
+    }
     val_main = raw1;
     val_sub = raw2;
 #else
