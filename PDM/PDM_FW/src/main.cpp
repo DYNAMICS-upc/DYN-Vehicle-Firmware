@@ -14,9 +14,8 @@ extern "C" void app_main(void) {
         bool pump_enable = (inv_temp_high || motor_temp_high) || manual_pump_override;
         mosfet_driver_set(pump_enable);
         
-        if (mosfet_driver_check_fault()) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
+        mosfet_driver_update();
+        
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

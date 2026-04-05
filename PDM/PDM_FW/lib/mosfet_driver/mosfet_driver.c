@@ -76,3 +76,10 @@ bool mosfet_driver_check_fault(void) {
     return false;
 #endif
 }
+
+void mosfet_driver_update(void) {
+    if (mosfet_driver_check_fault()) {
+        // Logica interna de disparo: apagar mosfets y notificar si es necesario
+        mosfet_driver_set(false);
+    }
+}
