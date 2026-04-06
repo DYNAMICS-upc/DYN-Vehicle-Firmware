@@ -35,6 +35,7 @@ void mosfet_driver_init(uint8_t ctrl_pin, uint8_t sense_pin) {
 #if defined(ESP_PLATFORM)
     gpio_reset_pin((gpio_num_t)s_ctrl_pin);
     gpio_set_direction((gpio_num_t)s_ctrl_pin, GPIO_MODE_OUTPUT);
+    gpio_set_level((gpio_num_t)s_ctrl_pin, 0); // Asegurar apagado inicial
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
     };
@@ -44,6 +45,8 @@ void mosfet_driver_init(uint8_t ctrl_pin, uint8_t sense_pin) {
         .atten = ADC_ATTEN_DB_12,
     };
     adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_6, &config);
+#else
+    digitalWrite(s_ctrl_pin, LOW); // Asegurar apagado nativo
 #endif
 }
 
