@@ -3,17 +3,23 @@
 #include "freertos/task.h"
 #include "fan_driver.h"
 #include "pid_ctrl.h"
+#include "ads8688_driver.h"
 
 extern "C" void app_main(void) {
     fan_driver_init(18);
+    ads8688_driver_init(); // Initialize the ADC driver
     
     pid_ctrl_t fan_pid;
     pid_ctrl_init(&fan_pid, 2, 1, 1, 2000);
     
     uint32_t adc_filtered = 0;
     while (1) {
-        // Simulated ADC read (0-4095)
-        uint32_t adc_raw = 2048; // Dummy for now
+        uint16_t raw_temp = 0;
+        if (!ads8688_driver_read_channel(0, &raw_temp)) {
+            // Error reading, fallback or keep old value
+        }
+        
+        uint32_t adc_raw = raw_temp;
         // Simple Exponential Moving Average (EMA) filter to avoid floating noise
         adc_filtered = (adc_filtered * 7 + adc_raw) >> 3;
         
