@@ -38,6 +38,16 @@ bool can_driver_send_frame(uint32_t id, uint8_t* data, uint8_t len) {
     return true;
 }
 
+bool can_driver_receive_frame(uint32_t* id, uint8_t* data, uint8_t* len) {
+#if defined(ARDUINO)
+    // En Arduino se usaría CAN0.readMsgBuf()
+    return false;
+#else
+    // Mock
+    return false;
+#endif
+}
+
 uint32_t can_driver_get_last_id(void) {
     return s_last_sent_id;
 }
