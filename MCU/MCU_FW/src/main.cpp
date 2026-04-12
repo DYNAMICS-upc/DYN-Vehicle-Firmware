@@ -3,10 +3,12 @@
 #include "freertos/task.h"
 #include "apps_driver.h"
 #include "brake_driver.h"
+#include "r2d_manager.h"
 
 extern "C" void app_main(void) {
     apps_driver_init(34, 35); // Example ESP32 ADC pins
     brake_driver_init(33); // Example Brake pin
+    r2d_manager_init();
 
     bool implausibility = false;
 
@@ -29,6 +31,10 @@ extern "C" void app_main(void) {
         if (implausibility) {
             // Cortar par (dummy)
         }
+
+        bool dummy_ts_active = true;
+        bool dummy_button = false;
+        r2d_manager_update(dummy_ts_active, brake_val > 500, dummy_button);
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
