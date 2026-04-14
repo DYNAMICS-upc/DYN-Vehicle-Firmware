@@ -1,7 +1,7 @@
 #pragma once
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
+#include <Arduino_FreeRTOS.h>
+#include <queue.h>
 #include <stdbool.h>
 #include "volante_state.h"
 

@@ -1,19 +1,16 @@
 #include "ipc.h"
+#include <Arduino_FreeRTOS.h>
+#include <queue.h>
 
-// Golden Rule: NO dynamic memory allocation. Use StaticQueue_t.
+// On AVR Arduino FreeRTOS, static allocation is disabled by default in FreeRTOSConfig.h.
+// Falling back to dynamic allocation for xQueue.
 #define QUEUE_LENGTH 5
 #define ITEM_SIZE sizeof(volante_state_t)
-
-static StaticQueue_t s_state_queue_cb;
-static uint8_t s_state_queue_storage[QUEUE_LENGTH * ITEM_SIZE];
 
 QueueHandle_t g_state_queue = NULL;
 
 void ipc_init(void) {
-    g_state_queue = xQueueCreateStatic(QUEUE_LENGTH,
-                                       ITEM_SIZE,
-                                       s_state_queue_storage,
-                                       &s_state_queue_cb);
+    g_state_queue = xQueueCreate(QUEUE_LENGTH, ITEM_SIZE);
 }
 
 bool ipc_send_state(const volante_state_t* state) {
