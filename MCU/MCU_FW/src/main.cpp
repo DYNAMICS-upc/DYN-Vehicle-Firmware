@@ -4,11 +4,13 @@
 #include "apps_driver.h"
 #include "brake_driver.h"
 #include "r2d_manager.h"
+#include "shared_state.h"
 
 extern "C" void app_main(void) {
     apps_driver_init(34, 35); // Example ESP32 ADC pins
     brake_driver_init(33); // Example Brake pin
     r2d_manager_init();
+    shared_state_init();
 
     bool implausibility = false;
 
@@ -32,9 +34,18 @@ extern "C" void app_main(void) {
             // Cortar par (dummy)
         }
 
-        bool dummy_ts_active = true;
-        bool dummy_button = false;
-        r2d_manager_update(dummy_ts_active, brake_val > 500, dummy_button);
+        mcu_shared_state_t state;
+        shared_state_get(&state);
+        
+        state.ts_active = true; // dummy
+        state.brake_pressed = brake_val > 500;
+        state.r2d_button_pressed = false; // dummy
+        state.implausibility_fault = implausibility;
+        
+        r2d_manager_update(state.ts_active, state.brake_pressed, state.r2d_button_pressed);
+        state.r2d_state = r2d_manager_get_state();
+        
+        shared_state_set(&state);
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
