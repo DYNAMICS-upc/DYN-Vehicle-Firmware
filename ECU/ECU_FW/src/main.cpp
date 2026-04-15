@@ -4,10 +4,10 @@
 #include "fan_driver.h"
 #include "pid_ctrl.h"
 #include "ads8688_driver.h"
+#include "bsp.h"
 
 extern "C" void app_main(void) {
-    fan_driver_init(18);
-    ads8688_driver_init(); // Initialize the ADC driver
+    bsp_init();
     
     pid_ctrl_t fan_pid;
     pid_ctrl_init(&fan_pid, 2, 1, 1, 2000);
