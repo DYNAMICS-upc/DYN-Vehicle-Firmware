@@ -9,9 +9,6 @@
 extern "C" void app_main(void) {
     bsp_init();
     
-    pid_ctrl_t fan_pid;
-    pid_ctrl_init(&fan_pid, 2, 1, 1, 2000);
-    
     uint32_t adc_filtered = 0;
     while (1) {
         uint16_t raw_temp = 0;
@@ -21,9 +18,21 @@ extern "C" void app_main(void) {
         
         uint32_t adc_raw = raw_temp;
         // Simple Exponential Moving Average (EMA) filter to avoid floating noise
-        adc_filtered = (adc_filtered * 7 + adc_raw) >> 3;
+        static uint32_t s_adc_filtered = 0;
+        s_adc_filtered = (s_adc_filtered * 7 + adc_raw) >> 3;
         
-        uint8_t speed = pid_ctrl_compute(&fan_pid, (int32_t)adc_filtered);
+        // Mapa de temperaturas (LUT): Temp bruta -> PWM %
+        uint8_t speed = 0;
+        if (s_adc_filtered < 1000) {
+            speed = 20; // 20%
+        } else if (s_adc_filtered < 2000) {
+            speed = 50; // 50%
+        } else if (s_adc_filtered < 3000) {
+            speed = 80; // 80%
+        } else {
+            speed = 100; // 100%
+        }
+        
         fan_driver_set_speed(speed);
         
         vTaskDelay(pdMS_TO_TICKS(10));
