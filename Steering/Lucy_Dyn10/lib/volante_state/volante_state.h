@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "dashboard_struct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,9 @@ typedef struct {
     bool is_r2d;
     bool has_bms_fault;
     bool has_imd_fault;
+    
+    // Dashboard data for Nextion
+    dashboard_struct_t dash;
 } volante_state_t;
 
 #ifdef __cplusplus

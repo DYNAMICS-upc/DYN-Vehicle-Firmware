@@ -18,8 +18,19 @@ void can_service_update(void) {
             // Structured parsing
             if (id == 0x100) { // BMS status
                 state.has_bms_fault = (data[0] != 0);
+                state.dash.bms_fault = state.has_bms_fault;
+                state.dash.soc_percent = data[1];
+                state.dash.bat_max_temp = data[2];
+                state.dash.hv_voltage = (data[3] << 8) | data[4];
             } else if (id == 0x101) { // IMD status
                 state.has_imd_fault = (data[0] != 0);
+                state.dash.imd_fault = state.has_imd_fault;
+            } else if (id == 0x200) { // Inverter data
+                state.dash.speed_kmh = data[0];
+                state.dash.motor_temp = data[1];
+                state.dash.inv_temp = data[2];
+                state.dash.is_r2d = (data[3] != 0);
+                state.dash.inv_fault = (data[4] != 0);
             }
             ipc_send_state(&state);
         }
