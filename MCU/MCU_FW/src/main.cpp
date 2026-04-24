@@ -6,6 +6,7 @@
 #include "r2d_manager.h"
 #include "shared_state.h"
 #include "torque_ctrl.h"
+#include "can_car_driver.h"
 
 extern "C" void app_main(void) {
     apps_driver_init(34, 35); // Example ESP32 ADC pins
@@ -13,10 +14,14 @@ extern "C" void app_main(void) {
     r2d_manager_init();
     shared_state_init();
     torque_ctrl_init();
+    can_car_init();
 
     bool implausibility = false;
 
     while (1) {
+        car_rx_data_t car_data;
+        can_car_drain_rx(&car_data);
+        
         uint16_t apps_val = 0;
         if (!apps_driver_read(&apps_val)) {
             implausibility = true;
@@ -48,7 +53,7 @@ extern "C" void app_main(void) {
         
         state.ts_active = true; // dummy
         state.brake_pressed = brake_val > 500;
-        state.r2d_button_pressed = false; // dummy
+        state.r2d_button_pressed = (car_data.button_1 != 0);
         state.implausibility_fault = implausibility;
         
         r2d_manager_update(state.ts_active, state.brake_pressed, state.r2d_button_pressed);
