@@ -15,8 +15,8 @@ static button_cb_t s_on_press = NULL;
 static button_cb_t s_on_release = NULL;
 
 static uint32_t s_last_debounce_time = 0;
-// 50ms de anti-rebote (debouncing)
-static const uint32_t DEBOUNCE_DELAY = 50;
+// 30ms de anti-rebote (debouncing tuneado)
+static const uint32_t DEBOUNCE_DELAY = 30;
 static int s_last_btn_state = HIGH;
 static int s_btn_state = HIGH;
 
