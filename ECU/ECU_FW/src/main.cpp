@@ -10,6 +10,8 @@ extern "C" void app_main(void) {
     bsp_init();
     
     uint32_t adc_filtered = 0;
+    bool is_r2d = false; // Mock until CAN is fully integrated
+    
     while (1) {
         uint16_t raw_temp = 0;
         if (!ads8688_driver_read_channel(0, &raw_temp)) {
@@ -31,6 +33,10 @@ extern "C" void app_main(void) {
             speed = 80; // 80%
         } else {
             speed = 100; // 100%
+        }
+        
+        if (!is_r2d) {
+            speed = 0; // Apagar ventiladores si no estamos en Ready to Drive
         }
         
         fan_driver_set_speed(speed);
