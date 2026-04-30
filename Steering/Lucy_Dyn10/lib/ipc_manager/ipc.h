@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-// Expose the queue handle
-extern QueueHandle_t g_state_queue;
+// The queue handle is now completely hidden inside ipc.c
 
 void ipc_init(void);
 bool ipc_send_state(const volante_state_t* state);
