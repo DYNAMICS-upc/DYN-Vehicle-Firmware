@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 void launch_ctrl_init(void);
-void launch_ctrl_update(void);
+int32_t launch_ctrl_update(uint32_t speed_front, uint32_t speed_rear);
 
 #ifdef __cplusplus
 }
