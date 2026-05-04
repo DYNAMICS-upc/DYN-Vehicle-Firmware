@@ -1,7 +1,10 @@
 #include "can_service.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcpp"
 #include "driver/twai.h"
+#pragma GCC diagnostic pop
 #include "ipc.h"
 
 // Define CAN RX Task to read states and send them via IPC
