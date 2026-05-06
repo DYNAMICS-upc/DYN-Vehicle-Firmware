@@ -3,33 +3,25 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include <string.h>
+#include "ipc.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcpp"
 #include "driver/twai.h"
 #pragma GCC diagnostic pop
 
-#define LOG_QUEUE_LEN 10
-
-typedef struct {
-    uint8_t data[8];
-    uint8_t len;
-} log_msg_t;
-
 static StaticTask_t tx_task_tcb;
 static StackType_t tx_task_stack[2048];
-static QueueHandle_t s_log_queue;
-static StaticQueue_t s_log_queue_struct;
-static uint8_t s_log_queue_storage[LOG_QUEUE_LEN * sizeof(log_msg_t)];
 
 static void can_tx_task(void *arg) {
-    log_msg_t msg;
+    ecu_tx_frame_t frame;
+    QueueHandle_t txq = ipc_get_tx_queue();
     while (1) {
-        if (xQueueReceive(s_log_queue, &msg, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(txq, &frame, portMAX_DELAY) == pdTRUE) {
             twai_message_t t_msg = {0};
-            t_msg.identifier = 0x200; // Log ID
-            t_msg.data_length_code = msg.len;
-            memcpy(t_msg.data, msg.data, msg.len);
+            t_msg.identifier = frame.id;
+            t_msg.data_length_code = frame.dlc;
+            memcpy(t_msg.data, frame.data, frame.dlc);
             twai_transmit(&t_msg, pdMS_TO_TICKS(5));
         }
     }
@@ -50,15 +42,16 @@ void can_service_init(void) {
         twai_start();
     }
 
-    s_log_queue = xQueueCreateStatic(LOG_QUEUE_LEN, sizeof(log_msg_t), s_log_queue_storage, &s_log_queue_struct);
     xTaskCreateStaticPinnedToCore(can_tx_task, "can_tx", 2048, NULL, 8, tx_task_stack, &tx_task_tcb, 0);
 }
 
 void can_service_log(const char* str) {
-    if (!s_log_queue || !str) return;
-    log_msg_t msg;
-    msg.len = strlen(str);
-    if (msg.len > 8) msg.len = 8;
-    memcpy(msg.data, str, msg.len);
-    xQueueSend(s_log_queue, &msg, 0);
+    QueueHandle_t txq = ipc_get_tx_queue();
+    if (!txq || !str) return;
+    ecu_tx_frame_t frame = {0};
+    frame.id = 0x200; // Log ID
+    frame.dlc = strlen(str);
+    if (frame.dlc > 8) frame.dlc = 8;
+    memcpy(frame.data, str, frame.dlc);
+    xQueueSend(txq, &frame, 0);
 }

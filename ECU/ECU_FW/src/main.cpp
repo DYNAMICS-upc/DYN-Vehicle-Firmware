@@ -2,13 +2,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "fan_driver.h"
-#include "pid_ctrl.h"
 #include "ads8688_driver.h"
 #include "bsp.h"
+#include "ipc.h"
 #include "can_service.h"
 
 extern "C" void app_main(void) {
     bsp_init();
+    ipc_init();
     can_service_init();
     
     can_service_log("ECU INIT");
