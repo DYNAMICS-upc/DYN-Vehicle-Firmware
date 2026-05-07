@@ -5,8 +5,8 @@
 #include "ipc.h"
 #include "can_service.h"
 #include "can_driver.h"
+#include "led_driver.h"
 
-const int LED_PIN = 13;
 const int BTN_PIN = 2;
 
 void can_task(void *pvParameters) {
@@ -19,7 +19,7 @@ void can_task(void *pvParameters) {
 }
 
 void on_btn_press() {
-    digitalWrite(LED_PIN, HIGH);
+    led_driver_set(LED_R2D, true);
     volante_state_t state;
     if (ipc_receive_state(&state)) {
         state.btn_launch_pressed = true;
@@ -28,7 +28,7 @@ void on_btn_press() {
 }
 
 void on_btn_release() {
-    digitalWrite(LED_PIN, LOW);
+    led_driver_set(LED_R2D, false);
     volante_state_t state;
     if (ipc_receive_state(&state)) {
         state.btn_launch_pressed = false;
@@ -37,7 +37,7 @@ void on_btn_release() {
 }
 
 void setup() {
-    pinMode(LED_PIN, OUTPUT);
+    led_driver_init();
     pinMode(BTN_PIN, INPUT_PULLUP);
     
     ipc_init();
@@ -54,6 +54,11 @@ void setup() {
 }
 
 void loop() {
+    static uint32_t last_heartbeat = 0;
+    if (millis() - last_heartbeat >= 500) {
+        last_heartbeat = millis();
+        led_driver_toggle(LED_HEARTBEAT);
+    }
     button_driver_update();
     delay(10);
 }
