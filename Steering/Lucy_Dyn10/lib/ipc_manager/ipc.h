@@ -14,6 +14,7 @@ extern "C" {
 void ipc_init(void);
 bool ipc_send_state(const volante_state_t* state);
 bool ipc_receive_state(volante_state_t* state);
+bool ipc_peek_state(volante_state_t* state);
 
 #ifdef __cplusplus
 }

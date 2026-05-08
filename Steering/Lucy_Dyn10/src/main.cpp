@@ -19,7 +19,6 @@ void can_task(void *pvParameters) {
 }
 
 void on_btn_press() {
-    led_driver_set(LED_R2D, true);
     volante_state_t state;
     if (ipc_receive_state(&state)) {
         state.btn_launch_pressed = true;
@@ -28,7 +27,6 @@ void on_btn_press() {
 }
 
 void on_btn_release() {
-    led_driver_set(LED_R2D, false);
     volante_state_t state;
     if (ipc_receive_state(&state)) {
         state.btn_launch_pressed = false;
@@ -59,6 +57,13 @@ void loop() {
         last_heartbeat = millis();
         led_driver_toggle(LED_HEARTBEAT);
     }
+    
+    volante_state_t state;
+    if (ipc_peek_state(&state)) {
+        led_driver_set(LED_R2D, state.dash.is_r2d);
+        led_driver_set(LED_FAULT, state.has_bms_fault || state.has_imd_fault || state.dash.inv_fault);
+    }
+    
     button_driver_update();
     delay(10);
 }
