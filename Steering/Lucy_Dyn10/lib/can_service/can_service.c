@@ -2,6 +2,8 @@
 #include "can_driver.h"
 #include "ipc.h"
 #include "volante_state.h"
+#include <Arduino_FreeRTOS.h>
+#include <task.h>
 
 void can_service_init(void) {
     // any initialization if needed
@@ -33,6 +35,19 @@ void can_service_update(void) {
                 state.dash.inv_fault = (data[4] != 0);
             }
             ipc_send_state(&state);
+        }
+    }
+    
+    // Envio periódico del estado del volante via CAN
+    static TickType_t last_send = 0;
+    TickType_t now = xTaskGetTickCount();
+    if (now - last_send >= pdMS_TO_TICKS(100)) {
+        last_send = now;
+        volante_state_t state;
+        if (ipc_peek_state(&state)) {
+            uint8_t tx_data[8] = {0};
+            tx_data[0] = state.btn_launch_pressed ? 1 : 0;
+            can_driver_send_frame(0x301, tx_data, 1);
         }
     }
 }

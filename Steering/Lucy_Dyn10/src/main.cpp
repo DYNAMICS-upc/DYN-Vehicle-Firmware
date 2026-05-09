@@ -6,6 +6,7 @@
 #include "can_service.h"
 #include "can_driver.h"
 #include "led_driver.h"
+#include "nextion_driver.h"
 
 const int BTN_PIN = 2;
 
@@ -36,6 +37,7 @@ void on_btn_release() {
 
 void setup() {
     led_driver_init();
+    nextion_driver_init();
     pinMode(BTN_PIN, INPUT_PULLUP);
     
     ipc_init();
