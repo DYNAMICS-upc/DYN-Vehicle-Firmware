@@ -14,7 +14,6 @@ extern "C" void app_main(void) {
     
     can_service_log("ECU INIT");
     
-    uint32_t adc_filtered = 0;
     bool is_r2d = false; // Mock until CAN is fully integrated
     
     while (1) {
@@ -45,6 +44,22 @@ extern "C" void app_main(void) {
         }
         
         fan_driver_set_speed(speed);
+        
+        static uint32_t last_can_send = 0;
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (now - last_can_send >= 100) {
+            last_can_send = now;
+            QueueHandle_t txq = ipc_get_tx_queue();
+            if (txq) {
+                ecu_tx_frame_t frame = {};
+                frame.id = 0x400; // ECU Sensors ID
+                frame.dlc = 3;
+                frame.data[0] = (s_adc_filtered >> 8) & 0xFF;
+                frame.data[1] = s_adc_filtered & 0xFF;
+                frame.data[2] = speed;
+                xQueueSend(txq, &frame, 0);
+            }
+        }
         
         vTaskDelay(pdMS_TO_TICKS(10));
     }
