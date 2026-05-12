@@ -31,6 +31,11 @@ extern "C" void app_main(void) {
                 safe = false;
             }
         }
+        
+        uint16_t vbat_val = 12500; // Mock 12.5V (en mV)
+        if (!protection_check_undervoltage(vbat_val)) {
+            safe = false;
+        }
 
         // Lógica combinacional para la bomba de agua
         bool inv_temp_high = false; // Dummy

@@ -1,4 +1,6 @@
 #include "protection.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 // Definir los limites de corriente por canal (valores ADC)
 static const uint16_t CHANNEL_LIMITS[8] = {
@@ -29,6 +31,25 @@ bool protection_check_mux_channel(uint8_t channel, uint16_t current_val) {
     } else {
         // Reset counter si la corriente baja (enfriamiento)
         overcurrent_counters[channel] = 0;
+    }
+    
+    return true; // Seguro
+}
+
+#define VBAT_UNDERVOLTAGE_LIMIT 12000 // 12.0V en mV
+
+bool protection_check_undervoltage(uint16_t vbat_mv) {
+    static uint32_t undervoltage_start_ms = 0;
+    
+    if (vbat_mv < VBAT_UNDERVOLTAGE_LIMIT && vbat_mv > 1000) { // Ignorar valores residuales
+        if (undervoltage_start_ms == 0) {
+            undervoltage_start_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        } else if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - undervoltage_start_ms > 200) {
+            // Pasaron 200ms en subtension, dispara proteccion global
+            return false;
+        }
+    } else {
+        undervoltage_start_ms = 0;
     }
     
     return true; // Seguro

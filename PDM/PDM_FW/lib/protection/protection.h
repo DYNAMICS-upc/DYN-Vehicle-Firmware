@@ -11,6 +11,7 @@ extern "C" {
 
 void protection_init(void);
 bool protection_check_mux_channel(uint8_t channel, uint16_t current_val);
+bool protection_check_undervoltage(uint16_t vbat_mv);
 
 #ifdef __cplusplus
 }
