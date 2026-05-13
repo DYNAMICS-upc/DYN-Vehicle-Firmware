@@ -50,6 +50,46 @@ extern "C" void app_main(void) {
             mosfet_driver_set(false);
         }
 
+        // Lógica de Precharge
+        static enum {
+            PRECHARGE_OFF,
+            PRECHARGE_PRECHARGING,
+            PRECHARGE_ON,
+            PRECHARGE_ERROR
+        } precharge_state = PRECHARGE_OFF;
+        static uint32_t precharge_start = 0;
+        
+        bool ts_active_req = false; // Mock TS request
+        uint16_t hv_voltage = 0; // Mock HV voltage
+        
+        switch (precharge_state) {
+            case PRECHARGE_OFF:
+                if (ts_active_req && safe) {
+                    precharge_state = PRECHARGE_PRECHARGING;
+                    precharge_start = xTaskGetTickCount() * portTICK_PERIOD_MS;
+                }
+                break;
+            case PRECHARGE_PRECHARGING:
+                if (!safe) {
+                    precharge_state = PRECHARGE_ERROR;
+                } else if (hv_voltage > 400) {
+                    precharge_state = PRECHARGE_ON;
+                } else if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - precharge_start > 3000) {
+                    precharge_state = PRECHARGE_ERROR;
+                }
+                break;
+            case PRECHARGE_ON:
+                if (!safe || !ts_active_req) {
+                    precharge_state = PRECHARGE_OFF;
+                }
+                break;
+            case PRECHARGE_ERROR:
+                if (!ts_active_req) {
+                    precharge_state = PRECHARGE_OFF;
+                }
+                break;
+        }
+
         mosfet_driver_update();
         
         vTaskDelay(pdMS_TO_TICKS(10));
