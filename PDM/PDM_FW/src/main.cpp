@@ -7,9 +7,23 @@
 #include "ipc.h"
 #include "can_service.h"
 
+// --- Hardware Pins ---
+#define MOSFET_PIN_LATCH    18
+#define MOSFET_PIN_ENABLE   34
+#define MUX_PIN_S0          25
+#define MUX_PIN_S1          26
+#define MUX_PIN_S2          27
+#define MUX_PIN_SIG         32
+
+// --- System Constants ---
+#define MUX_CHANNELS                  8
+#define MOCK_VBAT_MV                  12500
+#define PRECHARGE_HV_THRESHOLD_V      400
+#define PRECHARGE_TIMEOUT_MS          3000
+
 extern "C" void app_main(void) {
-    mosfet_driver_init(18, 34); // Example ESP32 pins
-    mux_adc_driver_init(25, 26, 27, 32); // Example S0, S1, S2, SIG pins
+    mosfet_driver_init(MOSFET_PIN_LATCH, MOSFET_PIN_ENABLE);
+    mux_adc_driver_init(MUX_PIN_S0, MUX_PIN_S1, MUX_PIN_S2, MUX_PIN_SIG);
     protection_init();
     ipc_init();
     can_service_init();
@@ -24,7 +38,7 @@ extern "C" void app_main(void) {
 
         // Ciclo de lectura de canales y protección
         bool safe = true;
-        for (uint8_t i = 0; i < 8; i++) {
+        for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
             mux_adc_driver_select(i);
             uint16_t adc_val = mux_adc_driver_read();
             if (!protection_check_mux_channel(i, adc_val)) {
@@ -32,7 +46,7 @@ extern "C" void app_main(void) {
             }
         }
         
-        uint16_t vbat_val = 12500; // Mock 12.5V (en mV)
+        uint16_t vbat_val = MOCK_VBAT_MV;
         if (!protection_check_undervoltage(vbat_val)) {
             safe = false;
         }
@@ -72,9 +86,9 @@ extern "C" void app_main(void) {
             case PRECHARGE_PRECHARGING:
                 if (!safe) {
                     precharge_state = PRECHARGE_ERROR;
-                } else if (hv_voltage > 400) {
+                } else if (hv_voltage > PRECHARGE_HV_THRESHOLD_V) {
                     precharge_state = PRECHARGE_ON;
-                } else if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - precharge_start > 3000) {
+                } else if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - precharge_start > PRECHARGE_TIMEOUT_MS) {
                     precharge_state = PRECHARGE_ERROR;
                 }
                 break;
