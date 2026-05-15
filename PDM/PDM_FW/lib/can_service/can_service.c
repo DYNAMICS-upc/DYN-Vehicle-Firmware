@@ -18,6 +18,20 @@ static void can_rx_task(void *arg) {
                 cmd.mosfet_id = rx_msg.data[0];
                 cmd.enable = (rx_msg.data[1] != 0);
                 ipc_send_mosfet_cmd(&cmd);
+            } else if (rx_msg.identifier == 0x401 && rx_msg.data_length_code >= 1) {
+                // Mensaje ECU de estado de TS
+                vehicle_state_t state;
+                if (ipc_peek_vehicle_state(&state)) {
+                    state.ts_active_req = (rx_msg.data[0] != 0);
+                    ipc_send_vehicle_state(&state);
+                }
+            } else if (rx_msg.identifier == 0x200 && rx_msg.data_length_code >= 5) {
+                // Mensaje inversor (simulado) para HV Voltage
+                vehicle_state_t state;
+                if (ipc_peek_vehicle_state(&state)) {
+                    state.hv_voltage = (rx_msg.data[3] << 8) | rx_msg.data[4];
+                    ipc_send_vehicle_state(&state);
+                }
             }
         }
     }

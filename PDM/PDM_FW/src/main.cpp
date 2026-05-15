@@ -73,8 +73,11 @@ extern "C" void app_main(void) {
         } precharge_state = PRECHARGE_OFF;
         static uint32_t precharge_start = 0;
         
-        bool ts_active_req = false; // Mock TS request
-        uint16_t hv_voltage = 0; // Mock HV voltage
+        vehicle_state_t v_state = {false, 0};
+        ipc_peek_vehicle_state(&v_state);
+        
+        bool ts_active_req = v_state.ts_active_req;
+        uint16_t hv_voltage = v_state.hv_voltage;
         
         switch (precharge_state) {
             case PRECHARGE_OFF:
