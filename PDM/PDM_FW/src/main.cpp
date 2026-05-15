@@ -98,11 +98,13 @@ extern "C" void app_main(void) {
             case PRECHARGE_ON:
                 if (!safe || !ts_active_req) {
                     precharge_state = PRECHARGE_OFF;
+                    precharge_start = 0;
                 }
                 break;
             case PRECHARGE_ERROR:
                 if (!ts_active_req) {
                     precharge_state = PRECHARGE_OFF;
+                    precharge_start = 0;
                 }
                 break;
         }
