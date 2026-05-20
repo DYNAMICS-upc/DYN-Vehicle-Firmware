@@ -6,6 +6,7 @@
 #include "r2d_manager.h"
 #include "shared_state.h"
 #include "torque_ctrl.h"
+#include "launch_ctrl.h"
 #include "can_car_driver.h"
 
 extern "C" void app_main(void) {
@@ -14,6 +15,7 @@ extern "C" void app_main(void) {
     r2d_manager_init();
     shared_state_init();
     torque_ctrl_init();
+    launch_ctrl_init();
     can_car_init();
 
     bool implausibility = false;
@@ -63,7 +65,13 @@ extern "C" void app_main(void) {
 
         bool r2d_active = (state.r2d_state == 4); // READY state
 
-        int32_t torque_command = torque_ctrl_calculate(apps_val, speed_rpm, state.brake_pressed, r2d_active);
+        // Mock velocidades (luego vendrán del encoder y can)
+        uint32_t speed_front = 50;
+        uint32_t speed_rear = 55;
+        
+        int32_t slip_multiplier = launch_ctrl_update(speed_front, speed_rear);
+
+        int32_t torque_command = torque_ctrl_calculate(apps_val, speed_rpm, state.brake_pressed, r2d_active, slip_multiplier);
         // torque_command would then be sent to the inverter via CAN
 
         vTaskDelay(pdMS_TO_TICKS(10));
