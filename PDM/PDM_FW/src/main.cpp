@@ -21,6 +21,10 @@
 #define PRECHARGE_HV_THRESHOLD_V      400
 #define PRECHARGE_TIMEOUT_MS          3000
 
+static inline bool check_precharge_timeout(uint32_t start_ms) {
+    return ((xTaskGetTickCount() * portTICK_PERIOD_MS) - start_ms) > PRECHARGE_TIMEOUT_MS;
+}
+
 extern "C" void app_main(void) {
     mosfet_driver_init(MOSFET_PIN_LATCH, MOSFET_PIN_ENABLE);
     mux_adc_driver_init(MUX_PIN_S0, MUX_PIN_S1, MUX_PIN_S2, MUX_PIN_SIG);
@@ -91,7 +95,7 @@ extern "C" void app_main(void) {
                     precharge_state = PRECHARGE_ERROR;
                 } else if (hv_voltage > PRECHARGE_HV_THRESHOLD_V) {
                     precharge_state = PRECHARGE_ON;
-                } else if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - precharge_start > PRECHARGE_TIMEOUT_MS) {
+                } else if (check_precharge_timeout(precharge_start)) {
                     precharge_state = PRECHARGE_ERROR;
                 }
                 break;
