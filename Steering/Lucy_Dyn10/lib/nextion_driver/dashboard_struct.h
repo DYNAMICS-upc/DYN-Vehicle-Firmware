@@ -30,6 +30,7 @@ typedef struct {
     bool bms_fault;
     bool imd_fault;
     bool inv_fault;
+    uint8_t precharge_state;
 } dashboard_struct_t;
 
 void dashboard_struct_init(dashboard_struct_t* dash);

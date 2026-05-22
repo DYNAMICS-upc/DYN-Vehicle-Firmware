@@ -64,6 +64,14 @@ void loop() {
     if (ipc_peek_state(&state)) {
         led_driver_set(LED_R2D, state.dash.is_r2d);
         led_driver_set(LED_FAULT, state.has_bms_fault || state.has_imd_fault || state.dash.inv_fault);
+        
+        static uint8_t last_precharge_state = 255;
+        if (state.dash.precharge_state != last_precharge_state) {
+            last_precharge_state = state.dash.precharge_state;
+            char cmd[32];
+            snprintf(cmd, sizeof(cmd), "tPrecharge.txt=\"State: %d\"", state.dash.precharge_state);
+            nextion_driver_send_cmd(cmd);
+        }
     }
     
     button_driver_update();

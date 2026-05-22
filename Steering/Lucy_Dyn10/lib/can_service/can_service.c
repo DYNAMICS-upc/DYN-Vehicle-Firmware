@@ -33,6 +33,8 @@ void can_service_update(void) {
                 state.dash.inv_temp = data[2];
                 state.dash.is_r2d = (data[3] != 0);
                 state.dash.inv_fault = (data[4] != 0);
+            } else if (id == 0x500) { // PDM precharge state
+                state.dash.precharge_state = data[0];
             }
             ipc_send_state(&state);
         }
