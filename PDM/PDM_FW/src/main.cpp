@@ -115,6 +115,12 @@ extern "C" void app_main(void) {
 
         mosfet_driver_update();
         
+        static uint32_t last_can_tx = 0;
+        if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - last_can_tx > 100) {
+            last_can_tx = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            can_service_send_precharge_state((uint8_t)precharge_state);
+        }
+        
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

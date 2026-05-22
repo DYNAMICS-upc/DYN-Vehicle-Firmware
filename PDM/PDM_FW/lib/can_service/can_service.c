@@ -52,3 +52,14 @@ void can_service_init(void) {
     static StackType_t s_rx_stack[2048];
     xTaskCreateStaticPinnedToCore(can_rx_task, "can_rx", 2048, NULL, 9, s_rx_stack, &s_rx_tcb, 0);
 }
+
+void can_service_send_precharge_state(uint8_t state) {
+    twai_message_t tx_msg;
+    tx_msg.identifier = 0x500; // PDM Precharge State ID
+    tx_msg.extd = 0;
+    tx_msg.rtr = 0;
+    tx_msg.data_length_code = 1;
+    tx_msg.data[0] = state;
+    
+    twai_transmit(&tx_msg, pdMS_TO_TICKS(10));
+}
