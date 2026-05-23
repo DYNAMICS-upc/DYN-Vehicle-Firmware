@@ -7,8 +7,7 @@
 #include "can_driver.h"
 #include "led_driver.h"
 #include "nextion_driver.h"
-
-const int BTN_PIN = 2;
+#include "buttons_app.h"
 
 void can_task(void *pvParameters) {
     (void)pvParameters;
@@ -19,26 +18,10 @@ void can_task(void *pvParameters) {
     }
 }
 
-void on_btn_press() {
-    volante_state_t state;
-    if (ipc_receive_state(&state)) {
-        state.btn_launch_pressed = true;
-        ipc_send_state(&state);
-    }
-}
-
-void on_btn_release() {
-    volante_state_t state;
-    if (ipc_receive_state(&state)) {
-        state.btn_launch_pressed = false;
-        ipc_send_state(&state);
-    }
-}
 
 void setup() {
     led_driver_init();
     nextion_driver_init();
-    pinMode(BTN_PIN, INPUT_PULLUP);
     
     ipc_init();
     can_driver_init(10); // CS pin 10
@@ -47,7 +30,7 @@ void setup() {
     volante_state_t init_state = {0};
     ipc_send_state(&init_state);
 
-    button_driver_init(BTN_PIN, on_btn_press, on_btn_release);
+    buttons_app_init();
     
     // Fallback to dynamic allocation for AVR
     xTaskCreate(can_task, "CAN_Task", 256, NULL, 1, NULL);
@@ -74,6 +57,6 @@ void loop() {
         }
     }
     
-    button_driver_update();
+    buttons_app_update();
     delay(10);
 }
