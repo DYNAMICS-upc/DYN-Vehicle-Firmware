@@ -8,12 +8,14 @@
 #include "torque_ctrl.h"
 #include "launch_ctrl.h"
 #include "can_car_driver.h"
+#include "ipc_manager.h"
 
 extern "C" void app_main(void) {
     apps_driver_init(34, 35); // Example ESP32 ADC pins
     brake_driver_init(33); // Example Brake pin
     r2d_manager_init();
     shared_state_init();
+    ipc_manager_init();
     torque_ctrl_init();
     launch_ctrl_init();
     can_car_init();
