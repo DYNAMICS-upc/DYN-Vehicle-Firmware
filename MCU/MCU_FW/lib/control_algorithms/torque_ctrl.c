@@ -1,4 +1,5 @@
 #include "torque_ctrl.h"
+#include "math_utils.h"
 
 #define MAX_TORQUE 32767
 #define THROTTLE_MAX 1000
@@ -16,11 +17,9 @@ int32_t torque_ctrl_calculate(uint32_t throttle_raw, uint32_t speed_rpm, bool br
         return 0; // Cut torque if brake is pressed (safety)
     }
 
-    if (throttle_raw > THROTTLE_MAX) {
-        throttle_raw = THROTTLE_MAX;
-    }
+    throttle_raw = math_clamp(throttle_raw, 0, THROTTLE_MAX);
 
-    int32_t torque = (int32_t)((throttle_raw * MAX_TORQUE) / THROTTLE_MAX);
+    int32_t torque = math_map(throttle_raw, 0, THROTTLE_MAX, 0, MAX_TORQUE);
     
     // Aplicar reduccion por excesivo slip (slip_multiplier va de 100 a 1000)
     torque = (torque * slip_multiplier) / 1000;
