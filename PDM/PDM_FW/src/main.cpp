@@ -6,6 +6,7 @@
 #include "protection.h"
 #include "ipc.h"
 #include "can_service.h"
+#include "app.h"
 
 // --- Hardware Pins ---
 #define MOSFET_PIN_LATCH    18
@@ -25,13 +26,15 @@ static inline bool check_precharge_timeout(uint32_t start_ms) {
     return ((xTaskGetTickCount() * portTICK_PERIOD_MS) - start_ms) > PRECHARGE_TIMEOUT_MS;
 }
 
-extern "C" void app_main(void) {
+void app_init(void) {
     mosfet_driver_init(MOSFET_PIN_LATCH, MOSFET_PIN_ENABLE);
     mux_adc_driver_init(MUX_PIN_S0, MUX_PIN_S1, MUX_PIN_S2, MUX_PIN_SIG);
     protection_init();
     ipc_init();
     can_service_init();
+}
 
+void app_run(void) {
     while (1) {
         // Procesar comandos de MOSFET desde la cola IPC
         mosfet_cmd_t cmd;
@@ -123,4 +126,9 @@ extern "C" void app_main(void) {
         
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
+
+extern "C" void app_main(void) {
+    app_init();
+    app_run();
 }
