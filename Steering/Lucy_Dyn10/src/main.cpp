@@ -8,6 +8,7 @@
 #include "led_driver.h"
 #include "nextion_driver.h"
 #include "buttons_app.h"
+#include "bsp.h"
 
 void can_task(void *pvParameters) {
     (void)pvParameters;
@@ -24,7 +25,7 @@ void setup() {
     nextion_driver_init();
     
     ipc_init();
-    can_driver_init(10); // CS pin 10
+    can_driver_init(BSP_PIN_CAN_CS);
     
     // Seed initial state
     volante_state_t init_state = {0};

@@ -1,10 +1,11 @@
 #include "led_driver.h"
 #include <Arduino.h>
+#include "bsp.h"
 
 static const uint8_t LED_PINS[LED_COUNT] = {
-    8,  // LED_R2D
-    9,  // LED_FAULT
-    13  // LED_HEARTBEAT
+    BSP_PIN_LED_R2D,  // LED_R2D
+    BSP_PIN_LED_FAULT,  // LED_FAULT
+    BSP_PIN_LED_HEARTBEAT  // LED_HEARTBEAT
 };
 
 void led_driver_init(void) {

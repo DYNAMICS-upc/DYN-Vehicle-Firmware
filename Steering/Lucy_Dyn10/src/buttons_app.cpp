@@ -2,8 +2,9 @@
 #include "buttons_app.h"
 #include "button_driver.h"
 #include "ipc.h"
+#include "bsp.h"
 
-const int BTN_PIN = 2;
+const int BTN_PIN = BSP_PIN_BTN_LAUNCH;
 
 static void on_btn_press() {
     volante_state_t state;
