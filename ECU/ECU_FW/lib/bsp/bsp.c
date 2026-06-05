@@ -3,6 +3,6 @@
 #include "ads8688_driver.h"
 
 void bsp_init(void) {
-    fan_driver_init(18);
+    fan_driver_init(ECU_PIN_FAN);
     ads8688_driver_init(); // Initialize the ADC driver
 }

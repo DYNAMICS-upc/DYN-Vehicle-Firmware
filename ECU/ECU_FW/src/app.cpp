@@ -26,7 +26,7 @@ void app_run(void) {
         uint32_t adc_raw = raw_temp;
         // Simple Exponential Moving Average (EMA) filter to avoid floating noise
         static uint32_t s_adc_filtered = 0;
-        s_adc_filtered = (s_adc_filtered * 7 + adc_raw) >> 3;
+        s_adc_filtered = EMA_FILTER_SHIFT(s_adc_filtered, adc_raw, 3);
         
         // Mapa de temperaturas (LUT): Temp bruta -> PWM %
         uint8_t speed = 0;
@@ -53,7 +53,7 @@ void app_run(void) {
             QueueHandle_t txq = ipc_get_tx_queue();
             if (txq) {
                 ecu_tx_frame_t frame = {};
-                frame.id = 0x400; // ECU Sensors ID
+                frame.id = ECU_CAN_ID_SENSORS;
                 frame.dlc = 3;
                 frame.data[0] = (s_adc_filtered >> 8) & 0xFF;
                 frame.data[1] = s_adc_filtered & 0xFF;
