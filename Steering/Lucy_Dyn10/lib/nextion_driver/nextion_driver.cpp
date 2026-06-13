@@ -49,4 +49,25 @@ void nextion_driver_update(const dashboard_struct_t* dash) {
         snprintf(cmd, sizeof(cmd), "jSoc.val=%d", dash->soc_percent);
         nextion_driver_send_cmd(cmd);
     }
+
+    if (dash->motor_temp != s_cached_dash.motor_temp) {
+        s_cached_dash.motor_temp = dash->motor_temp;
+        char cmd[32];
+        snprintf(cmd, sizeof(cmd), "tMotorTemp.txt=\"%d C\"", dash->motor_temp);
+        nextion_driver_send_cmd(cmd);
+    }
+    
+    if (dash->hv_voltage != s_cached_dash.hv_voltage) {
+        s_cached_dash.hv_voltage = dash->hv_voltage;
+        char cmd[32];
+        snprintf(cmd, sizeof(cmd), "tHVVolt.txt=\"%d V\"", dash->hv_voltage);
+        nextion_driver_send_cmd(cmd);
+    }
+
+    if (dash->is_r2d != s_cached_dash.is_r2d) {
+        s_cached_dash.is_r2d = dash->is_r2d;
+        char cmd[32];
+        snprintf(cmd, sizeof(cmd), "tR2D.txt=\"%s\"", dash->is_r2d ? "R2D" : "OFF");
+        nextion_driver_send_cmd(cmd);
+    }
 }
