@@ -1,4 +1,5 @@
 #include "can_service.h"
+#if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -16,14 +17,16 @@ static StackType_t tx_task_stack[2048];
 static void can_tx_task(void *arg) {
     ecu_tx_frame_t frame;
     QueueHandle_t txq = ipc_get_tx_queue();
+    TickType_t last_wake = xTaskGetTickCount();
     while (1) {
-        if (xQueueReceive(txq, &frame, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(txq, &frame, 0) == pdTRUE) {
             twai_message_t t_msg = {0};
             t_msg.identifier = frame.id;
             t_msg.data_length_code = frame.dlc;
             memcpy(t_msg.data, frame.data, frame.dlc);
-            twai_transmit(&t_msg, pdMS_TO_TICKS(5));
+            twai_transmit(&t_msg, 0);
         }
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(10)); // 100 Hz deterministic loop
     }
 }
 
@@ -42,7 +45,7 @@ void can_service_init(void) {
         twai_start();
     }
 
-    xTaskCreateStaticPinnedToCore(can_tx_task, "can_tx", 2048, NULL, 8, tx_task_stack, &tx_task_tcb, 0);
+    xTaskCreateStaticPinnedToCore(can_tx_task, "can_tx", 2048, NULL, 8, tx_task_stack, &tx_task_tcb, 1);
 }
 
 void can_service_log(const char* str) {
@@ -55,3 +58,7 @@ void can_service_log(const char* str) {
     memcpy(frame.data, str, frame.dlc);
     xQueueSend(txq, &frame, 0);
 }
+#else
+void can_service_init(void) {}
+void can_service_log(const char* str) { (void)str; }
+#endif

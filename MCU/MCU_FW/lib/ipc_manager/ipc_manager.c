@@ -2,10 +2,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
+static StaticQueue_t s_can_tx_queue_struct;
+static uint8_t s_can_tx_queue_storage[20 * sizeof(mcu_can_msg_t)];
 static QueueHandle_t s_can_tx_queue;
 
 void ipc_manager_init(void) {
-    s_can_tx_queue = xQueueCreate(20, sizeof(mcu_can_msg_t));
+    s_can_tx_queue = xQueueCreateStatic(20, sizeof(mcu_can_msg_t), s_can_tx_queue_storage, &s_can_tx_queue_struct);
 }
 
 bool ipc_manager_send_can_msg(const mcu_can_msg_t* msg) {

@@ -10,9 +10,12 @@ static uint8_t s_mosfet_queue_storage[QUEUE_LENGTH * ITEM_SIZE];
 static QueueHandle_t s_mosfet_queue;
 static QueueHandle_t s_vehicle_state_queue;
 
+static StaticQueue_t s_vehicle_state_queue_struct;
+static uint8_t s_vehicle_state_queue_storage[1 * sizeof(vehicle_state_t)];
+
 void ipc_init(void) {
     s_mosfet_queue = xQueueCreateStatic(QUEUE_LENGTH, ITEM_SIZE, s_mosfet_queue_storage, &s_mosfet_queue_struct);
-    s_vehicle_state_queue = xQueueCreate(1, sizeof(vehicle_state_t));
+    s_vehicle_state_queue = xQueueCreateStatic(1, sizeof(vehicle_state_t), s_vehicle_state_queue_storage, &s_vehicle_state_queue_struct);
 
     vehicle_state_t init_state = {false, 0};
     xQueueSend(s_vehicle_state_queue, &init_state, 0);

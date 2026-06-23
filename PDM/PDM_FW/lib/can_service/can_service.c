@@ -1,4 +1,5 @@
 #include "can_service.h"
+#if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #pragma GCC diagnostic push
@@ -10,8 +11,9 @@
 // Define CAN RX Task to read states and send them via IPC
 static void can_rx_task(void *arg) {
     twai_message_t rx_msg;
+    TickType_t last_wake = xTaskGetTickCount();
     while (1) {
-        if (twai_receive(&rx_msg, pdMS_TO_TICKS(100)) == ESP_OK) {
+        while (twai_receive(&rx_msg, 0) == ESP_OK) {
             // Lectura de estados: por ejemplo, ID 0x100 es para comandos de MOSFET
             if (rx_msg.identifier == 0x100 && rx_msg.data_length_code >= 2) {
                 mosfet_cmd_t cmd;
@@ -34,12 +36,13 @@ static void can_rx_task(void *arg) {
                 }
             }
         }
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(10)); // 100 Hz deterministic loop
     }
 }
 
 void can_service_init(void) {
     // Basic TWAI config
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)5, (gpio_num_t)4, TWAI_MODE_NORMAL);
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)39, (gpio_num_t)40, TWAI_MODE_NORMAL);
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
@@ -50,7 +53,7 @@ void can_service_init(void) {
     // Static task for CAN RX
     static StaticTask_t s_rx_tcb;
     static StackType_t s_rx_stack[2048];
-    xTaskCreateStaticPinnedToCore(can_rx_task, "can_rx", 2048, NULL, 9, s_rx_stack, &s_rx_tcb, 0);
+    xTaskCreateStaticPinnedToCore(can_rx_task, "can_rx", 2048, NULL, 9, s_rx_stack, &s_rx_tcb, 1);
 }
 
 void can_service_send_precharge_state(uint8_t state) {
@@ -63,3 +66,7 @@ void can_service_send_precharge_state(uint8_t state) {
     
     twai_transmit(&tx_msg, pdMS_TO_TICKS(10));
 }
+#else
+void can_service_init(void) {}
+void can_service_send_precharge_state(uint8_t state) { (void)state; }
+#endif
