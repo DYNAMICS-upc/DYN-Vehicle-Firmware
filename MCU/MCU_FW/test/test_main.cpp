@@ -40,6 +40,32 @@ void test_r2d_transition(void) {
     TEST_ASSERT_EQUAL(R2D_STATE_READY, r2d_manager_get_state());
 }
 
+void test_torque_ctrl_no_r2d(void) {
+    TEST_ASSERT_EQUAL(0, torque_ctrl_calculate(500, 100, false, false, 1000));
+}
+
+void test_torque_ctrl_brake_pressed(void) {
+    TEST_ASSERT_EQUAL(0, torque_ctrl_calculate(500, 100, true, true, 1000));
+}
+
+void test_torque_ctrl_normal_map(void) {
+    // 500 is 50%, mapped to 32767 -> ~16383
+    int32_t t = torque_ctrl_calculate(500, 100, false, true, 1000);
+    TEST_ASSERT_EQUAL(16383, t);
+}
+
+void test_torque_ctrl_slip_multiplier(void) {
+    // 500 throttle -> 16383, but slip is 500 (50%), so torque should be ~8191
+    int32_t t = torque_ctrl_calculate(500, 100, false, true, 500);
+    TEST_ASSERT_EQUAL(8191, t);
+}
+
+void test_torque_ctrl_anti_kick(void) {
+    // 1000 throttle -> 32767, but rpm is 10 (< 50), limit is 3276
+    int32_t t = torque_ctrl_calculate(1000, 10, false, true, 1000);
+    TEST_ASSERT_EQUAL(3276, t);
+}
+
 void test_bspd(void) {
     torque_ctrl_init();
     // BSPD active: Throttle > 25% (assuming 1023 is max, 25% is ~255) and brake is pressed
@@ -53,5 +79,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_apps_implausible);
     RUN_TEST(test_r2d_transition);
     RUN_TEST(test_bspd);
+    RUN_TEST(test_torque_ctrl_no_r2d);
+    RUN_TEST(test_torque_ctrl_brake_pressed);
+    RUN_TEST(test_torque_ctrl_normal_map);
+    RUN_TEST(test_torque_ctrl_slip_multiplier);
+    RUN_TEST(test_torque_ctrl_anti_kick);
     return UNITY_END();
 }
