@@ -12,6 +12,8 @@ extern int analogRead(uint8_t pin);
 
 static uint8_t s_ctrl_pin = 0;
 static uint8_t s_sense_pin = 0;
+static uint8_t s_fault_counter = 0;
+#define FAULT_FILTER_LIMIT 5
 static const uint16_t MAX_CURRENT_THRESHOLD = 800; // Arbitrary ADC limit for mock
 
 #if !defined(ESP_PLATFORM)
@@ -58,9 +60,6 @@ void mosfet_driver_set(bool state) {
     digitalWrite(s_ctrl_pin, state ? 1 : 0);
 #endif
 }
-
-static uint8_t s_fault_counter = 0;
-#define FAULT_FILTER_LIMIT 5
 
 bool mosfet_driver_check_fault(void) {
 #if defined(ESP_PLATFORM)
