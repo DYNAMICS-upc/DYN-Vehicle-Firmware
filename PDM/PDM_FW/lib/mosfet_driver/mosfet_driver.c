@@ -32,6 +32,7 @@ void digitalWrite(uint8_t pin, int val) {
 void mosfet_driver_init(uint8_t ctrl_pin, uint8_t sense_pin) {
     s_ctrl_pin = ctrl_pin;
     s_sense_pin = sense_pin;
+    s_fault_counter = 0; // REINICIO ESTRICTO PARA TESTS
 #if defined(ESP_PLATFORM)
     gpio_reset_pin((gpio_num_t)s_ctrl_pin);
     gpio_set_direction((gpio_num_t)s_ctrl_pin, GPIO_MODE_OUTPUT);
