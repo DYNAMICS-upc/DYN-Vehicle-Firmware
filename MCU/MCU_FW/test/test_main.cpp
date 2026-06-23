@@ -1,5 +1,7 @@
 #include <unity.h>
 #include "apps_driver.h"
+#include "r2d_manager.h"
+#include "torque_ctrl.h"
 
 void setUp(void) {
     apps_driver_init(1, 2);
@@ -19,9 +21,29 @@ void test_apps_implausible(void) {
     TEST_ASSERT_FALSE(apps_driver_read(&val));
 }
 
+void test_r2d_transition(void) {
+    r2d_manager_init();
+    // Fail case: missing button
+    r2d_manager_update(true, true, false);
+    TEST_ASSERT_NOT_EQUAL(R2D_STATE_READY, r2d_manager_get_state());
+    
+    // Success case: all conditions met
+    r2d_manager_update(true, true, true);
+    TEST_ASSERT_EQUAL(R2D_STATE_READY, r2d_manager_get_state());
+}
+
+void test_bspd(void) {
+    torque_ctrl_init();
+    // BSPD active: Throttle > 25% (assuming 1023 is max, 25% is ~255) and brake is pressed
+    int32_t torque = torque_ctrl_calculate(300, 1000, true, true, 100);
+    TEST_ASSERT_EQUAL(0, torque);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_apps_plausible);
     RUN_TEST(test_apps_implausible);
+    RUN_TEST(test_r2d_transition);
+    RUN_TEST(test_bspd);
     return UNITY_END();
 }

@@ -16,9 +16,18 @@ void test_mosfet_fault(void) {
     TEST_ASSERT_TRUE(mosfet_driver_check_fault());
 }
 
+void test_mosfet_soft_start(void) {
+    // Simular un pico de inrush de carga capacitiva que no deberia hacer saltar el fault inmediatamente
+    mosfet_driver_set_mock_current(1200);
+    // Asumimos que check_fault tiene tolerancia de inrush en implementacion futura
+    // Esto fallara con el codigo actual y requerira implementacion
+    TEST_ASSERT_FALSE(mosfet_driver_check_fault());
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_mosfet_no_fault);
     RUN_TEST(test_mosfet_fault);
+    RUN_TEST(test_mosfet_soft_start);
     return UNITY_END();
 }
