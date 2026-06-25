@@ -43,8 +43,8 @@ void test_mosfet_filter_reset(void) {
     
     // Now it should take another 5 high cycles to fault
     mosfet_driver_set_mock_current(900);
-    for(int i = 0; i < 4; i++) mosfet_driver_check_fault();
-    TEST_ASSERT_FALSE(mosfet_driver_check_fault()); // Filter hasn't tripped
+    for(int i = 0; i < 4; i++) mosfet_driver_check_fault(); // 1 to 4
+    TEST_ASSERT_TRUE(mosfet_driver_check_fault()); // 5th trips it
 }
 
 int main(int argc, char **argv) {
