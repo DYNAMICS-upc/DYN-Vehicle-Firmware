@@ -10,6 +10,7 @@
 #include "launch_ctrl.h"
 #include "can_car_driver.h"
 #include "ipc_manager.h"
+#include "ota_service.h"
 
 void app_init(void) {
     apps_driver_init(34, 35); // Example ESP32 ADC pins
@@ -69,6 +70,7 @@ void app_run(void) {
         shared_state_set(&state);
 
         bool r2d_active = (state.r2d_state == 4); // READY state
+        ota_set_r2d_state(r2d_active);
 
         // Mock velocidades (luego vendrán del encoder y can)
         uint32_t speed_front = 50;
