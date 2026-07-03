@@ -5,6 +5,7 @@
 #include "freertos/queue.h"
 #include <string.h>
 #include "ipc.h"
+#include "ota_service.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcpp"
@@ -25,6 +26,14 @@ static void can_tx_task(void *arg) {
             t_msg.data_length_code = frame.dlc;
             memcpy(t_msg.data, frame.data, frame.dlc);
             twai_transmit(&t_msg, 0);
+        }
+        
+        twai_message_t rx_msg;
+        while (twai_receive(&rx_msg, 0) == ESP_OK) {
+            if (rx_msg.identifier == 0x21 && rx_msg.data_length_code >= 7) {
+                // Mensaje de estado R2D de la MCU
+                ota_set_r2d_state(rx_msg.data[6] == 4);
+            }
         }
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(10)); // 100 Hz deterministic loop
     }

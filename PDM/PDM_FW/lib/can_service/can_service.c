@@ -7,6 +7,7 @@
 #include "driver/twai.h"
 #pragma GCC diagnostic pop
 #include "ipc.h"
+#include "ota_service.h"
 
 // Define CAN RX Task to read states and send them via IPC
 static void can_rx_task(void *arg) {
@@ -34,6 +35,9 @@ static void can_rx_task(void *arg) {
                     state.hv_voltage = (rx_msg.data[3] << 8) | rx_msg.data[4];
                     ipc_send_vehicle_state(&state);
                 }
+            } else if (rx_msg.identifier == 0x21 && rx_msg.data_length_code >= 7) {
+                // Mensaje de estado R2D de la MCU
+                ota_set_r2d_state(rx_msg.data[6] == 4);
             }
         }
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(10)); // 100 Hz deterministic loop

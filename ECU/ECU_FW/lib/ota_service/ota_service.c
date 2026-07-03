@@ -15,8 +15,19 @@
 #define WIFI_SSID "DynamicsRouter"
 #define WIFI_PASS "Dynamics2026"
 static const char *TAG = "OTA_SERVICE";
+static bool s_ota_r2d_active = false;
+
+void ota_set_r2d_state(bool is_r2d) {
+    s_ota_r2d_active = is_r2d;
+}
 
 static esp_err_t ota_update_handler(httpd_req_t *req) {
+    if (s_ota_r2d_active) {
+        ESP_LOGE(TAG, "OTA rejected: Vehicle is in R2D (Ready to Drive)!");
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
     esp_ota_handle_t ota_handle;
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
     if (!update_partition) {
