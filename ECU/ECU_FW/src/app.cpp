@@ -5,12 +5,15 @@
 #include "ads8688_driver.h"
 #include "bsp.h"
 #include "ipc.h"
+#include "ipc.h"
 #include "can_service.h"
+#include "fault_manager.h"
 
 void app_init(void) {
     bsp_init();
     ipc_init();
     can_service_init();
+    fault_manager_init();
     can_service_log("ECU INIT");
 }
 
@@ -20,7 +23,9 @@ void app_run(void) {
     while (1) {
         uint16_t raw_temp = 0;
         if (!ads8688_driver_read_channel(0, &raw_temp)) {
-            // Error reading, fallback or keep old value
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 1); // ADC Error
+        } else if (fault_manager_is_high_fault_active()) {
+            fault_manager_clear_all();
         }
         
         uint32_t adc_raw = raw_temp;
@@ -42,6 +47,10 @@ void app_run(void) {
         
         if (!is_r2d) {
             speed = 0; // Apagar ventiladores si no estamos en Ready to Drive
+        }
+        
+        if (fault_manager_is_high_fault_active()) {
+            speed = 100; // Si hay fallo crítico, forzar ventiladores al 100% por seguridad
         }
         
         fan_driver_set_speed(speed);

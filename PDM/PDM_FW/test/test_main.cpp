@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "mosfet_driver.h"
+#include "fault_manager.h"
 
 void setUp(void) {
     mosfet_driver_init(1, 2);
@@ -47,8 +48,25 @@ void test_mosfet_filter_reset(void) {
     TEST_ASSERT_TRUE(mosfet_driver_check_fault()); // 5th trips it
 }
 
+void test_fault_manager(void) {
+    fault_manager_init();
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+    
+    // Low priority should not trigger high fault state
+    fault_manager_report(FAULT_CAT_RESOURCES, FAULT_PRIORITY_LOW, 1);
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+    
+    // High priority should lock the system
+    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 2);
+    TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    
+    fault_manager_clear_all();
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
+    RUN_TEST(test_fault_manager);
     RUN_TEST(test_mosfet_no_fault);
     RUN_TEST(test_mosfet_fault);
     RUN_TEST(test_mosfet_soft_start);

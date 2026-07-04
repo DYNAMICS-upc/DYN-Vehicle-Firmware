@@ -9,6 +9,7 @@
 #include "nextion_driver.h"
 #include "buttons_app.h"
 #include "bsp.h"
+#include "fault_manager.h"
 
 void can_task(void *pvParameters) {
     (void)pvParameters;
@@ -32,6 +33,7 @@ void setup() {
     ipc_send_state(&init_state);
 
     buttons_app_init();
+    fault_manager_init();
     
     // Fallback to dynamic allocation for AVR
     xTaskCreate(can_task, "CAN_Task", 256, NULL, 1, NULL);
@@ -49,7 +51,12 @@ void loop() {
         led_driver_set(LED_R2D, state.dash.is_r2d);
         led_driver_set(LED_FAULT, state.has_bms_fault || state.has_imd_fault || state.dash.inv_fault);
         
+        // Simulación de cuelgue de UI: Prioridad LOW
+        uint32_t start_time = millis();
         nextion_driver_update(&state.dash);
+        if (millis() - start_time > 100) { // Si tarda más de 100ms
+            fault_manager_report(FAULT_CAT_RESOURCES, FAULT_PRIORITY_LOW, 1);
+        }
     }
     
     buttons_app_update();

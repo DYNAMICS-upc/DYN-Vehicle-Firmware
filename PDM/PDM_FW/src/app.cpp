@@ -7,6 +7,7 @@
 #include "ipc.h"
 #include "can_service.h"
 #include "pdm_config.h"
+#include "fault_manager.h"
 
 static inline bool check_precharge_timeout(uint32_t start_ms) {
     return ((xTaskGetTickCount() * portTICK_PERIOD_MS) - start_ms) > PRECHARGE_TIMEOUT_MS;
@@ -18,6 +19,7 @@ void app_init(void) {
     protection_init();
     ipc_init();
     can_service_init();
+    fault_manager_init();
 }
 
 void app_run(void) {
@@ -55,6 +57,9 @@ void app_run(void) {
             pump_enable = false; // Cut pump if not safe
             // Override queue state if protection triggers
             mosfet_driver_set(false);
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 1);
+        } else if (fault_manager_is_high_fault_active()) {
+            fault_manager_clear_all();
         }
 
         // Lógica de Precharge
@@ -82,10 +87,12 @@ void app_run(void) {
             case PRECHARGE_PRECHARGING:
                 if (!safe) {
                     precharge_state = PRECHARGE_ERROR;
+                    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 2);
                 } else if (hv_voltage > PRECHARGE_HV_THRESHOLD_V) {
                     precharge_state = PRECHARGE_ON;
                 } else if (check_precharge_timeout(precharge_start)) {
                     precharge_state = PRECHARGE_ERROR;
+                    fault_manager_report(FAULT_CAT_TIMING, FAULT_PRIORITY_HIGH, 3);
                 }
                 break;
             case PRECHARGE_ON:

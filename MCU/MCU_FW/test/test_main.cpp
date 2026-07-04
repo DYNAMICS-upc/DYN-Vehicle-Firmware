@@ -2,6 +2,7 @@
 #include "apps_driver.h"
 #include "r2d_manager.h"
 #include "torque_ctrl.h"
+#include "fault_manager.h"
 
 void setUp(void) {
     apps_driver_init(1, 2);
@@ -73,6 +74,22 @@ void test_bspd(void) {
     TEST_ASSERT_EQUAL(0, torque);
 }
 
+void test_fault_manager(void) {
+    fault_manager_init();
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+    
+    // Low priority should not trigger high fault state
+    fault_manager_report(FAULT_CAT_RESOURCES, FAULT_PRIORITY_LOW, 1);
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+    
+    // High priority should lock the system
+    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 2);
+    TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    
+    fault_manager_clear_all();
+    TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_apps_plausible);
@@ -84,5 +101,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_torque_ctrl_normal_map);
     RUN_TEST(test_torque_ctrl_slip_multiplier);
     RUN_TEST(test_torque_ctrl_anti_kick);
+    RUN_TEST(test_fault_manager);
     return UNITY_END();
 }
