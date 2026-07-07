@@ -1,94 +1,64 @@
 #include "mosfet_driver.h"
-#include <stddef.h>
+#include <string.h>
 
 #if defined(ESP_PLATFORM)
-#include "esp_adc/adc_oneshot.h"
 #include "driver/gpio.h"
-static adc_oneshot_unit_handle_t s_adc1_handle;
-#endif
+#else
 extern void digitalWrite(uint8_t pin, int val);
-extern int analogRead(uint8_t pin);
 #define LOW 0
-
-static uint8_t s_ctrl_pin = 0;
-static uint8_t s_sense_pin = 0;
-static uint8_t s_fault_counter = 0;
-#define FAULT_FILTER_LIMIT 5
-static const uint16_t MAX_CURRENT_THRESHOLD = 800; // Arbitrary ADC limit for mock
-
-#if !defined(ESP_PLATFORM)
-static uint16_t s_mock_current = 0;
-void mosfet_driver_set_mock_current(uint16_t current_val) {
-    s_mock_current = current_val;
-}
-int analogRead(uint8_t pin) {
-    if (pin == s_sense_pin) return s_mock_current;
-    return 0;
-}
-void digitalWrite(uint8_t pin, int val) {
-    (void)pin;
-    (void)val;
-}
+#define HIGH 1
 #endif
 
-void mosfet_driver_init(uint8_t ctrl_pin, uint8_t sense_pin) {
-    s_ctrl_pin = ctrl_pin;
-    s_sense_pin = sense_pin;
-    s_fault_counter = 0; // REINICIO ESTRICTO PARA TESTS
+static const uint8_t s_mosfet_pins[MUX_CHANNELS] = { 4, 5, 6, 7, 15, 16, 17, 18, 8, 3, 41, 42 };
+static uint8_t s_mosfet_status[MUX_CHANNELS] = { 0 };
+
+void mosfet_driver_init(void) {
+    for (int i = 0; i < MUX_CHANNELS; i++) {
+        uint8_t pin = s_mosfet_pins[i];
 #if defined(ESP_PLATFORM)
-    gpio_reset_pin((gpio_num_t)s_ctrl_pin);
-    gpio_set_direction((gpio_num_t)s_ctrl_pin, GPIO_MODE_OUTPUT);
-    gpio_set_level((gpio_num_t)s_ctrl_pin, 0); // Asegurar apagado inicial
-    adc_oneshot_unit_init_cfg_t init_config = {
-        .unit_id = ADC_UNIT_1,
-    };
-    adc_oneshot_new_unit(&init_config, &s_adc1_handle);
-    adc_oneshot_chan_cfg_t config = {
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
-        .atten = ADC_ATTEN_DB_12,
-    };
-    adc_oneshot_config_channel(s_adc1_handle, ADC_CHANNEL_6, &config);
+        gpio_reset_pin((gpio_num_t)pin);
+        gpio_set_direction((gpio_num_t)pin, GPIO_MODE_OUTPUT);
+        gpio_set_level((gpio_num_t)pin, 0); // LOW turns ON in pdm.ino
 #else
-    digitalWrite(s_ctrl_pin, LOW); // Asegurar apagado nativo
+        digitalWrite(pin, LOW);
 #endif
-}
-
-void mosfet_driver_set(bool state) {
-#if defined(ESP_PLATFORM)
-    gpio_set_level((gpio_num_t)s_ctrl_pin, state ? 1 : 0);
-#else
-    digitalWrite(s_ctrl_pin, state ? 1 : 0);
-#endif
-}
-
-bool mosfet_driver_check_fault(void) {
-#if defined(ESP_PLATFORM)
-    int current = 0;
-    adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_6, &current);
-#else
-    int current = analogRead(s_sense_pin);
-#endif
-
-    if (current > MAX_CURRENT_THRESHOLD) {
-        s_fault_counter++;
-        if (s_fault_counter >= FAULT_FILTER_LIMIT) {
-#if defined(ESP_PLATFORM)
-            gpio_set_level((gpio_num_t)s_ctrl_pin, 0); // Force off on fault
-#else
-            digitalWrite(s_ctrl_pin, 0); // Force off on fault
-#endif
-            return true; // Fault detected
-        }
-        return false; // Soft-start tolerance
+        s_mosfet_status[i] = 1; // Default to ON / active
     }
+}
+
+void mosfet_driver_set_channel(uint8_t channel, bool enable) {
+    if (channel >= MUX_CHANNELS) return;
     
-    s_fault_counter = 0;
-    return false;
+    uint8_t pin = s_mosfet_pins[channel];
+    if (enable) {
+#if defined(ESP_PLATFORM)
+        gpio_set_level((gpio_num_t)pin, 0); // LOW = ON
+#else
+        digitalWrite(pin, LOW);
+#endif
+        s_mosfet_status[channel] = 1;
+    } else {
+#if defined(ESP_PLATFORM)
+        gpio_set_level((gpio_num_t)pin, 1); // HIGH = OFF / Trip
+#else
+        digitalWrite(pin, HIGH);
+#endif
+        s_mosfet_status[channel] = 0;
+    }
 }
 
-void mosfet_driver_update(void) {
-    if (mosfet_driver_check_fault()) {
-        // Logica interna de disparo: apagar mosfets y notificar si es necesario
-        mosfet_driver_set(false);
+void mosfet_driver_set_all(bool enable) {
+    for (int i = 0; i < MUX_CHANNELS; i++) {
+        mosfet_driver_set_channel(i, enable);
     }
+}
+
+uint8_t mosfet_driver_get_status(uint8_t channel) {
+    if (channel >= MUX_CHANNELS) return 0;
+    return s_mosfet_status[channel];
+}
+
+void mosfet_driver_get_all_statuses(uint8_t *out_statuses) {
+    if (!out_statuses) return;
+    memcpy(out_statuses, s_mosfet_status, sizeof(s_mosfet_status));
 }

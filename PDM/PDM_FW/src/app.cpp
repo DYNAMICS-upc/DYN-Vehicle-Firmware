@@ -4,119 +4,50 @@
 #include "mosfet_driver.h"
 #include "mux_adc_driver.h"
 #include "protection.h"
-#include "ipc.h"
 #include "can_service.h"
 #include "pdm_config.h"
 #include "fault_manager.h"
+#include "ota_service.h"
 
-static inline bool check_precharge_timeout(uint32_t start_ms) {
-    return ((xTaskGetTickCount() * portTICK_PERIOD_MS) - start_ms) > PRECHARGE_TIMEOUT_MS;
-}
+static uint16_t s_consumos_can[TOTAL_LOADS] = { 0 };
+static float s_v_bat_actual = 12.0f;
 
 void app_init(void) {
-    mosfet_driver_init(MOSFET_PIN_LATCH, MOSFET_PIN_ENABLE);
-    mux_adc_driver_init(MUX_PIN_S0, MUX_PIN_S1, MUX_PIN_S2, MUX_PIN_SIG);
+    mosfet_driver_init();
+    mux_adc_driver_init(MUX_PIN_S0, MUX_PIN_S1, MUX_PIN_S2, MUX_PIN_S3, MUX_COMMON_PIN);
     protection_init();
-    ipc_init();
     can_service_init();
     fault_manager_init();
 }
 
 void app_run(void) {
+    TickType_t last_wake_time = xTaskGetTickCount();
+    uint32_t last_can_tx_ms = 0;
+
     while (1) {
-        // Procesar comandos de MOSFET desde la cola IPC
-        mosfet_cmd_t cmd;
-        if (ipc_receive_mosfet_cmd(&cmd)) {
-            // Ignoramos el mosfet_id para la simulación actual
-            mosfet_driver_set(cmd.enable);
+        uint32_t current_time_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+
+        // 1. Verificación de subtensión de batería con debounce de 200ms
+        protection_check_battery(&s_v_bat_actual, current_time_ms);
+
+        // 2. Procesamiento de los 12 canales MUX con promedio de 10 muestras y fusible rápido
+        protection_process_shunts_and_mux(s_consumos_can);
+
+        // 3. Procesamiento de sensores Hall (Shutdown y Ventiladores)
+        protection_process_hall_sensors(s_consumos_can);
+
+        // 4. Verificación de alertas de bus CAN (Bus-Off / Errores de trama)
+        can_service_check_alerts();
+
+        // 5. Envío periódico de la tabla CAN completa a 10 Hz (100 ms)
+        if (current_time_ms - last_can_tx_ms >= CAN_INTERVAL_MS) {
+            last_can_tx_ms = current_time_ms;
+            uint8_t mosfets_status[MUX_CHANNELS];
+            mosfet_driver_get_all_statuses(mosfets_status);
+            can_service_send_all_telemetry(mosfets_status, s_consumos_can, s_v_bat_actual);
         }
 
-        // Ciclo de lectura de canales y protección
-        bool safe = true;
-        for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
-            mux_adc_driver_select(i);
-            uint16_t adc_val = mux_adc_driver_read();
-            if (!protection_check_mux_channel(i, adc_val)) {
-                safe = false;
-            }
-        }
-        
-        uint16_t vbat_val = MOCK_VBAT_MV;
-        if (!protection_check_undervoltage(vbat_val)) {
-            safe = false;
-        }
-
-        // Lógica combinacional para la bomba de agua
-        bool inv_temp_high = false; // Dummy
-        bool motor_temp_high = false; // Dummy
-        bool manual_pump_override = true; // Dummy
-        
-        bool pump_enable = (inv_temp_high || motor_temp_high) || manual_pump_override;
-        
-        if (!safe) {
-            pump_enable = false; // Cut pump if not safe
-            // Override queue state if protection triggers
-            mosfet_driver_set(false);
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 1);
-        } else if (fault_manager_is_high_fault_active()) {
-            fault_manager_clear_all();
-        }
-
-        // Lógica de Precharge
-        static enum {
-            PRECHARGE_OFF,
-            PRECHARGE_PRECHARGING,
-            PRECHARGE_ON,
-            PRECHARGE_ERROR
-        } precharge_state = PRECHARGE_OFF;
-        static uint32_t precharge_start = 0;
-        
-        vehicle_state_t v_state = {false, 0};
-        ipc_peek_vehicle_state(&v_state);
-        
-        bool ts_active_req = v_state.ts_active_req;
-        uint16_t hv_voltage = v_state.hv_voltage;
-        
-        switch (precharge_state) {
-            case PRECHARGE_OFF:
-                if (ts_active_req && safe) {
-                    precharge_state = PRECHARGE_PRECHARGING;
-                    precharge_start = xTaskGetTickCount() * portTICK_PERIOD_MS;
-                }
-                break;
-            case PRECHARGE_PRECHARGING:
-                if (!safe) {
-                    precharge_state = PRECHARGE_ERROR;
-                    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 2);
-                } else if (hv_voltage > PRECHARGE_HV_THRESHOLD_V) {
-                    precharge_state = PRECHARGE_ON;
-                } else if (check_precharge_timeout(precharge_start)) {
-                    precharge_state = PRECHARGE_ERROR;
-                    fault_manager_report(FAULT_CAT_TIMING, FAULT_PRIORITY_HIGH, 3);
-                }
-                break;
-            case PRECHARGE_ON:
-                if (!safe || !ts_active_req) {
-                    precharge_state = PRECHARGE_OFF;
-                    precharge_start = 0;
-                }
-                break;
-            case PRECHARGE_ERROR:
-                if (!ts_active_req) {
-                    precharge_state = PRECHARGE_OFF;
-                    precharge_start = 0;
-                }
-                break;
-        }
-
-        mosfet_driver_update();
-        
-        static uint32_t last_can_tx = 0;
-        if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - last_can_tx > 100) {
-            last_can_tx = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            can_service_send_precharge_state((uint8_t)precharge_state);
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // Lazo determinista de 10 ms (100 Hz)
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(10));
     }
 }
