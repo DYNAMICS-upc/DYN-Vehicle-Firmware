@@ -4,16 +4,14 @@
 
 #if defined(ESP_PLATFORM)
 #include "esp_log.h"
-static const char *TAG = "ECU_FAULT_MGR";
+static const char *TAG = "STEER_FAULT_MGR";
 #endif
 
 static bool s_high_fault_active = false;
-static bool s_failsafe_active = false;
-static fault_record_t s_last_fault = {};
+static fault_record_t s_last_fault = { 0 };
 
 void fault_manager_init(void) {
     s_high_fault_active = false;
-    s_failsafe_active = false;
     memset(&s_last_fault, 0, sizeof(s_last_fault));
 }
 
@@ -27,12 +25,12 @@ void fault_manager_report(fault_category_t category, fault_priority_t priority, 
     if (priority == FAULT_PRIORITY_HIGH) {
         s_high_fault_active = true;
 #if defined(ESP_PLATFORM)
-        ESP_LOGE(TAG, "ECU CRITICAL FAULT: Cat %d, Code %lu (Total Faults: %lu)", 
+        ESP_LOGE(TAG, "STEERING CRITICAL FAULT: Cat %d, Code %lu (Total Faults: %lu)", 
                  (int)category, (unsigned long)code, (unsigned long)s_last_fault.fault_count);
 #endif
     } else {
 #if defined(ESP_PLATFORM)
-        ESP_LOGW(TAG, "ECU WARNING (LOW PRIORITY): Cat %d, Code %lu", (int)category, (unsigned long)code);
+        ESP_LOGW(TAG, "STEERING WARNING (LOW PRIORITY): Cat %d, Code %lu", (int)category, (unsigned long)code);
 #endif
     }
 }
@@ -41,26 +39,11 @@ bool fault_manager_is_high_fault_active(void) {
     return s_high_fault_active;
 }
 
-void fault_manager_set_failsafe(bool active) {
-    s_failsafe_active = active;
-    if (active) {
-        s_high_fault_active = true;
-#if defined(ESP_PLATFORM)
-        ESP_LOGE(TAG, "ECU THERMAL FAILSAFE ACTIVE: Fans forced to 100%% safe speed.");
-#endif
-    }
-}
-
-bool fault_manager_is_failsafe_active(void) {
-    return s_failsafe_active;
-}
-
 fault_record_t fault_manager_get_last_fault(void) {
     return s_last_fault;
 }
 
 void fault_manager_clear_all(void) {
     s_high_fault_active = false;
-    s_failsafe_active = false;
     s_last_fault.active = false;
 }

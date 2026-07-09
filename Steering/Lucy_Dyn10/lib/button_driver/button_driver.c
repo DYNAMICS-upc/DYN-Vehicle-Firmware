@@ -20,17 +20,6 @@ static const uint32_t DEBOUNCE_DELAY = 30;
 static int s_last_btn_state = HIGH;
 static int s_btn_state = HIGH;
 
-// Allow injecting time for testing
-#ifndef ARDUINO
-static uint32_t s_mock_time = 0;
-void button_driver_set_time(uint32_t current_time_ms) {
-    s_mock_time = current_time_ms;
-}
-static uint32_t get_time(void) { return s_mock_time; }
-#else
-static uint32_t get_time(void) { return millis(); }
-#endif
-
 void button_driver_init(uint8_t pin, button_cb_t on_press, button_cb_t on_release) {
     s_pin = pin;
     s_on_press = on_press;
@@ -41,7 +30,7 @@ void button_driver_init(uint8_t pin, button_cb_t on_press, button_cb_t on_releas
 
 void button_driver_update(void) {
     int reading = digitalRead(s_pin);
-    uint32_t current_time = get_time();
+    uint32_t current_time = millis();
 
     if (reading != s_last_btn_state) {
         s_last_debounce_time = current_time;

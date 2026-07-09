@@ -1,4 +1,6 @@
 #include "can_service.h"
+#include "fault_manager.h"
+
 #if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -41,8 +43,8 @@ static void can_tx_task(void *arg) {
 
 void can_service_init(void) {
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
-        (gpio_num_t)5, // TX mock
-        (gpio_num_t)4, // RX mock
+        (gpio_num_t)5, // TX
+        (gpio_num_t)4, // RX
         TWAI_MODE_NORMAL
     );
     g_config.tx_queue_len = 10;
@@ -67,7 +69,30 @@ void can_service_log(const char* str) {
     memcpy(frame.data, str, frame.dlc);
     xQueueSend(txq, &frame, 0);
 }
+
+void can_service_send_diagnostic_dtc(uint8_t fan_motor_pct, uint8_t fan_inv_pct) {
+    QueueHandle_t txq = ipc_get_tx_queue();
+    if (!txq) return;
+
+    fault_record_t rec = fault_manager_get_last_fault();
+    ecu_tx_frame_t frame = {};
+    frame.id = CAN_ID_ECU_DIAGNOSTIC_DTC; // 0x503
+    frame.dlc = 8;
+    frame.data[0] = fault_manager_is_failsafe_active() ? 1 : (rec.active ? 2 : 0);
+    frame.data[1] = (uint8_t)rec.category;
+    frame.data[2] = (uint8_t)rec.priority;
+    frame.data[3] = (uint8_t)((rec.code >> 8) & 0xFF);
+    frame.data[4] = (uint8_t)(rec.code & 0xFF);
+    frame.data[5] = fan_motor_pct;
+    frame.data[6] = fan_inv_pct;
+    frame.data[7] = (uint8_t)(rec.fault_count & 0xFF);
+
+    xQueueSend(txq, &frame, 0);
+}
 #else
 void can_service_init(void) {}
 void can_service_log(const char* str) { (void)str; }
+void can_service_send_diagnostic_dtc(uint8_t fan_motor_pct, uint8_t fan_inv_pct) {
+    (void)fan_motor_pct; (void)fan_inv_pct;
+}
 #endif

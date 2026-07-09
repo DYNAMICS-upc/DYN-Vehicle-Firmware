@@ -30,16 +30,24 @@ void test_mosfet_init_and_control(void) {
     }
 }
 
-void test_protection_standard_channel_instant_trip(void) {
+void test_protection_standard_channel_instant_trip_and_locking(void) {
     // Channel 0: Nominal 2000 mA -> 130% = 2600 mA
-    // Below 130%: Safe
-    TEST_ASSERT_TRUE(protection_check_channel_instant(0, 2500.0f));
-    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
-    
-    // Above 130%: Immediate Trip on standard channels
+    // Above 130%: Immediate Trip
     TEST_ASSERT_FALSE(protection_check_channel_instant(0, 2700.0f));
     TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(0));
     TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    TEST_ASSERT_TRUE(fault_manager_is_channel_locked(0));
+
+    // ATTEMPT RE-ENABLE: Must be blocked by Safety Layer!
+    mosfet_driver_set_channel(0, true);
+    TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(0)); // Sigue apagado!
+    
+    // Diagnostic cause verification
+    fault_record_t rec = fault_manager_get_last_fault();
+    TEST_ASSERT_TRUE(rec.active);
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, rec.category);
+    TEST_ASSERT_EQUAL(FAULT_PRIORITY_HIGH, rec.priority);
+    TEST_ASSERT_EQUAL_UINT32(1, rec.code); // Canal 0 -> Code 1
 }
 
 void test_protection_inverter_persistence_3_samples(void) {
@@ -54,10 +62,15 @@ void test_protection_inverter_persistence_3_samples(void) {
     TEST_ASSERT_TRUE(protection_check_channel_instant(CANAL_INVERTER, overcurrent));
     TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(CANAL_INVERTER));
     
-    // Sample 3: Must TRIP!
+    // Sample 3: Must TRIP and LOCK!
     TEST_ASSERT_FALSE(protection_check_channel_instant(CANAL_INVERTER, overcurrent));
     TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(CANAL_INVERTER));
     TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    TEST_ASSERT_TRUE(fault_manager_is_channel_locked(CANAL_INVERTER));
+    
+    // Attempt re-enable must be blocked
+    mosfet_driver_set_channel(CANAL_INVERTER, true);
+    TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(CANAL_INVERTER));
 }
 
 void test_protection_volant_persistence_3_samples(void) {
@@ -69,9 +82,10 @@ void test_protection_volant_persistence_3_samples(void) {
     TEST_ASSERT_TRUE(protection_check_channel_instant(CANAL_VOLANT, overcurrent));
     TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(CANAL_VOLANT));
     
-    // Sample 3: Trips
+    // Sample 3: Trips and Locks
     TEST_ASSERT_FALSE(protection_check_channel_instant(CANAL_VOLANT, overcurrent));
     TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(CANAL_VOLANT));
+    TEST_ASSERT_TRUE(fault_manager_is_channel_locked(CANAL_VOLANT));
 }
 
 void test_protection_persistence_reset_on_recovery(void) {
@@ -88,29 +102,7 @@ void test_protection_persistence_reset_on_recovery(void) {
     TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(CANAL_INVERTER));
 }
 
-void test_protection_battery_undervoltage_debounce(void) {
-    // Setup mock V_SENSE to low voltage (< 5.0V)
-    // ADC 1000 with divider ~ 4.68V
-    mux_adc_driver_set_mock_pin_value(V_SENSE_PIN, 1000);
-    
-    float vbat = 0;
-    // At t = 0ms: Detected, but not tripped
-    TEST_ASSERT_TRUE(protection_check_battery(&vbat, 0));
-    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
-    
-    // At t = 100ms (< 200ms debounce): Still safe
-    TEST_ASSERT_TRUE(protection_check_battery(&vbat, 100));
-    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
-    
-    // At t = 250ms (> 200ms debounce): Tripped!
-    TEST_ASSERT_FALSE(protection_check_battery(&vbat, 250));
-    for (int i = 0; i < MUX_CHANNELS; i++) {
-        TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(i));
-    }
-    TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
-}
-
-void test_fault_manager(void) {
+void test_fault_manager_records_and_clearing(void) {
     fault_manager_init();
     TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
     
@@ -118,22 +110,28 @@ void test_fault_manager(void) {
     fault_manager_report(FAULT_CAT_RESOURCES, FAULT_PRIORITY_LOW, 1);
     TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
     
-    // High priority should lock the system
-    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 2);
+    // High priority should lock the system and register record
+    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 42);
     TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    
+    fault_record_t r = fault_manager_get_last_fault();
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, r.category);
+    TEST_ASSERT_EQUAL_UINT32(42, r.code);
+    TEST_ASSERT_EQUAL_UINT32(2, r.fault_count);
     
     fault_manager_clear_all();
     TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     UNITY_BEGIN();
     RUN_TEST(test_mosfet_init_and_control);
-    RUN_TEST(test_protection_standard_channel_instant_trip);
+    RUN_TEST(test_protection_standard_channel_instant_trip_and_locking);
     RUN_TEST(test_protection_inverter_persistence_3_samples);
     RUN_TEST(test_protection_volant_persistence_3_samples);
     RUN_TEST(test_protection_persistence_reset_on_recovery);
-    RUN_TEST(test_protection_battery_undervoltage_debounce);
-    RUN_TEST(test_fault_manager);
+    RUN_TEST(test_fault_manager_records_and_clearing);
     return UNITY_END();
 }

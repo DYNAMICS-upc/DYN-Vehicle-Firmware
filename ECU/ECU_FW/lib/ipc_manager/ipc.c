@@ -1,5 +1,6 @@
 #include "ipc.h"
 
+#if defined(ESP_PLATFORM)
 #define TX_QUEUE_LEN 32
 
 static StaticQueue_t s_tx_queue_struct;
@@ -13,3 +14,6 @@ void ipc_init(void) {
 QueueHandle_t ipc_get_tx_queue(void) {
     return s_tx_queue;
 }
+#else
+void ipc_init(void) {}
+#endif

@@ -1,12 +1,11 @@
 #include "mosfet_driver.h"
+#include "fault_manager.h"
 #include <string.h>
 
 #if defined(ESP_PLATFORM)
 #include "driver/gpio.h"
-#else
-extern void digitalWrite(uint8_t pin, int val);
-#define LOW 0
-#define HIGH 1
+#include "esp_log.h"
+static const char *TAG = "MOSFET_DRV";
 #endif
 
 static const uint8_t s_mosfet_pins[MUX_CHANNELS] = { 4, 5, 6, 7, 15, 16, 17, 18, 8, 3, 41, 42 };
@@ -20,7 +19,7 @@ void mosfet_driver_init(void) {
         gpio_set_direction((gpio_num_t)pin, GPIO_MODE_OUTPUT);
         gpio_set_level((gpio_num_t)pin, 0); // LOW turns ON in pdm.ino
 #else
-        digitalWrite(pin, LOW);
+        (void)pin;
 #endif
         s_mosfet_status[i] = 1; // Default to ON / active
     }
@@ -29,19 +28,28 @@ void mosfet_driver_init(void) {
 void mosfet_driver_set_channel(uint8_t channel, bool enable) {
     if (channel >= MUX_CHANNELS) return;
     
+    // SEGURIDAD: Si el canal fue bloqueado por fallo previo, rechazar cualquier intento de reactivación
+    if (enable && fault_manager_is_channel_locked(channel)) {
+#if defined(ESP_PLATFORM)
+        ESP_LOGE(TAG, "BLOCKED: Attempt to re-enable locked channel %d rejected by Safety Layer!", channel);
+#endif
+        s_mosfet_status[channel] = 0;
+        return;
+    }
+
     uint8_t pin = s_mosfet_pins[channel];
     if (enable) {
 #if defined(ESP_PLATFORM)
         gpio_set_level((gpio_num_t)pin, 0); // LOW = ON
 #else
-        digitalWrite(pin, LOW);
+        (void)pin;
 #endif
         s_mosfet_status[channel] = 1;
     } else {
 #if defined(ESP_PLATFORM)
         gpio_set_level((gpio_num_t)pin, 1); // HIGH = OFF / Trip
 #else
-        digitalWrite(pin, HIGH);
+        (void)pin;
 #endif
         s_mosfet_status[channel] = 0;
     }

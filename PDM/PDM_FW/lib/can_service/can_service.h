@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#define CAN_ID_PDM_DIAGNOSTIC_DTC 0x501 // ID Diagnóstica segura no colisionante
+
 void can_service_init(void);
 void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_t *consumos_can, float v_bat_actual);
 void can_service_check_alerts(void);

@@ -15,7 +15,8 @@
 static const char *TAG = "PDM_CAN";
 
 static void can_rx_task(void *arg) {
-    twai_message_t rx_msg;
+    (void)arg;
+    twai_message_t rx_msg = {};
     TickType_t last_wake = xTaskGetTickCount();
     while (1) {
         while (twai_receive(&rx_msg, 0) == ESP_OK) {
@@ -24,7 +25,7 @@ static void can_rx_task(void *arg) {
                 bool is_r2d = (rx_msg.data[6] == 4);
                 ota_set_r2d_state(is_r2d);
             }
-            // ID 0x100: Comandos manuales de MOSFETs
+            // ID 0x100: Comandos manuales de MOSFETs (con control de rechazo si el canal está en fallo)
             else if (rx_msg.identifier == 0x100 && rx_msg.data_length_code >= 2) {
                 uint8_t ch = rx_msg.data[0];
                 bool enable = (rx_msg.data[1] != 0);
@@ -112,7 +113,7 @@ void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_
             }
         }
 
-        // ID 6: añadir voltaje batería en bytes 4 y 5, y alerta de Volant en bytes 6 y 7
+        // ID 6: añadir voltaje batería en bytes 4 y 5, alerta de Volant en byte 6
         if (id == 6) {
             uint16_t vbat_can = (uint16_t)(v_bat_actual * 1000.0f);
             msg.data[4] = vbat_can & 0xFF;
@@ -121,11 +122,27 @@ void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_
             // Carga 4 (Volant+Dashes) corresponde al índice 3 (> 2500 mA)
             uint8_t alerta_carga4 = (consumos_can[3] > 2500) ? 1 : 0;
             msg.data[6] = alerta_carga4 & 0xFF;
-            msg.data[7] = 0;
+            msg.data[7] = 0; // Reserved
         }
 
         twai_transmit(&msg, pdMS_TO_TICKS(10));
     }
+
+    // Trama Diagnóstica Dedicada CAN ID 0x501 (DTC / Safe State)
+    memset(&msg, 0, sizeof(msg));
+    msg.identifier = CAN_ID_PDM_DIAGNOSTIC_DTC; // 0x501
+    msg.data_length_code = 8;
+    msg.extd = 0;
+    fault_record_t rec = fault_manager_get_last_fault();
+    msg.data[0] = fault_manager_is_high_fault_active() ? 1 : (rec.active ? 2 : 0);
+    msg.data[1] = (uint8_t)rec.category;
+    msg.data[2] = (uint8_t)rec.priority;
+    msg.data[3] = (uint8_t)((rec.code >> 8) & 0xFF);
+    msg.data[4] = (uint8_t)(rec.code & 0xFF);
+    msg.data[5] = (uint8_t)((rec.fault_count >> 8) & 0xFF);
+    msg.data[6] = (uint8_t)(rec.fault_count & 0xFF);
+    msg.data[7] = (uint8_t)(fault_manager_get_locked_mask() & 0xFF);
+    twai_transmit(&msg, pdMS_TO_TICKS(10));
 }
 #else
 void can_service_init(void) {}

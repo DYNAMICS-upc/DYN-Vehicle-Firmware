@@ -1,5 +1,6 @@
 #include "can_service.h"
 #include "can_driver.h"
+#include "fault_manager.h"
 #include "ipc.h"
 #include "volante_state.h"
 #include <Arduino_FreeRTOS.h>
@@ -33,14 +34,18 @@ void can_service_update(void) {
                 state.dash.inv_temp = data[2];
                 state.dash.is_r2d = (data[3] != 0);
                 state.dash.inv_fault = (data[4] != 0);
-            } else if (id == 0x500) { // PDM precharge state
-                state.dash.precharge_state = data[0];
+            } else if (id == 0x501) { // PDM Diagnostic DTC Frame
+                // data[0]: active flag, data[3..4]: error code (1..12: channel tripped, 99: undervoltage)
+            } else if (id == 0x502) { // MCU Diagnostic DTC Frame
+                // data[0]: active flag, data[3..4]: error code (101: APPS Implausible, etc.)
+            } else if (id == 0x503) { // ECU Diagnostic DTC Frame
+                // data[0]: active flag, data[3..4]: error code (201..203: NTC fail)
             }
             ipc_send_state(&state);
         }
     }
     
-    // Envio periódico del estado del volante via CAN
+    // Envio periódico del estado del volante via CAN (10 Hz)
     static TickType_t last_send = 0;
     TickType_t now = xTaskGetTickCount();
     if (now - last_send >= pdMS_TO_TICKS(100)) {
@@ -51,5 +56,18 @@ void can_service_update(void) {
             tx_data[0] = state.btn_launch_pressed ? 1 : 0;
             can_driver_send_frame(0x301, tx_data, 1);
         }
+
+        // Emisión periódica de la trama diagnóstica DTC del Volante en CAN ID 0x504
+        fault_record_t rec = fault_manager_get_last_fault();
+        uint8_t diag_data[8] = {0};
+        diag_data[0] = fault_manager_is_high_fault_active() ? 1 : (rec.active ? 2 : 0);
+        diag_data[1] = (uint8_t)rec.category;
+        diag_data[2] = (uint8_t)rec.priority;
+        diag_data[3] = (uint8_t)((rec.code >> 8) & 0xFF);
+        diag_data[4] = (uint8_t)(rec.code & 0xFF);
+        diag_data[5] = (uint8_t)((rec.fault_count >> 8) & 0xFF);
+        diag_data[6] = (uint8_t)(rec.fault_count & 0xFF);
+        diag_data[7] = 0; // Reserved
+        can_driver_send_frame(CAN_ID_STEERING_DIAGNOSTIC_DTC, diag_data, 8);
     }
 }

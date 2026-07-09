@@ -42,8 +42,9 @@ bool protection_check_channel_instant(uint8_t ch, float corrent_instantanea) {
             }
 
             if (tallar) {
-                mosfet_driver_set_channel(ch, false); // Apagar MOSFET
-                fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, ch + 1);
+                fault_manager_lock_channel(ch);       // 1. Bloqueo permanente de reactivación
+                mosfet_driver_set_channel(ch, false); // 2. Corte físico del MOSFET
+                fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, ch + 1); // 3. Registro de causa
                 
                 if (ch == CANAL_INVERTER) s_inv_sobre_consec = 0;
                 if (ch == CANAL_VOLANT) s_volant_sobre_consec = 0;
@@ -125,6 +126,9 @@ bool protection_check_battery(float *out_vbat_actual, uint32_t current_time_ms) 
         if (s_tiempo_bajo_voltaje == 0) {
             s_tiempo_bajo_voltaje = current_time_ms;
         } else if (current_time_ms - s_tiempo_bajo_voltaje > VBAT_UNDERVOLTAGE_DEBOUNCE_MS) {
+            for (int i = 0; i < MUX_CHANNELS; i++) {
+                fault_manager_lock_channel(i);
+            }
             mosfet_driver_set_all(false); // Cortar todo
             fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 99); // Error 99: Subtensión Batería
             return false; // Tripped

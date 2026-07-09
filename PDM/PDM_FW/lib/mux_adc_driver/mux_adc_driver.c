@@ -5,9 +5,6 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_rom_sys.h"
 static adc_oneshot_unit_handle_t s_adc1_handle = NULL;
-#else
-extern void digitalWrite(uint8_t pin, int val);
-extern int analogRead(uint8_t pin);
 #endif
 
 static uint8_t s_s0 = 0;
@@ -15,24 +12,6 @@ static uint8_t s_s1 = 0;
 static uint8_t s_s2 = 0;
 static uint8_t s_s3 = 0;
 static uint8_t s_sig_pin = 0;
-
-#if !defined(ESP_PLATFORM)
-static uint16_t s_mock_mux_values[16] = {0};
-static uint16_t s_mock_pin_values[64] = {0};
-static uint8_t s_selected_channel = 0;
-
-void mux_adc_driver_set_mock_value(uint8_t channel, uint16_t raw_val) {
-    if (channel < 16) {
-        s_mock_mux_values[channel] = raw_val;
-    }
-}
-
-void mux_adc_driver_set_mock_pin_value(uint8_t pin, uint16_t raw_val) {
-    if (pin < 64) {
-        s_mock_pin_values[pin] = raw_val;
-    }
-}
-#endif
 
 void mux_adc_driver_init(uint8_t pin_s0, uint8_t pin_s1, uint8_t pin_s2, uint8_t pin_s3, uint8_t mux_sig_pin) {
     s_s0 = pin_s0;
@@ -74,11 +53,7 @@ void mux_adc_driver_select(uint8_t channel) {
     gpio_set_level((gpio_num_t)s_s3, val_s3);
     esp_rom_delay_us(20); // 20us settling time
 #else
-    s_selected_channel = channel;
-    digitalWrite(s_s0, val_s0);
-    digitalWrite(s_s1, val_s1);
-    digitalWrite(s_s2, val_s2);
-    digitalWrite(s_s3, val_s3);
+    (void)val_s0; (void)val_s1; (void)val_s2; (void)val_s3;
 #endif
 }
 
@@ -90,7 +65,7 @@ uint16_t mux_adc_driver_read_raw(void) {
     }
     return (uint16_t)out;
 #else
-    return s_mock_mux_values[s_selected_channel];
+    return 0;
 #endif
 }
 
@@ -102,9 +77,7 @@ uint16_t mux_adc_driver_read_pin(uint8_t pin) {
     }
     return (uint16_t)out;
 #else
-    if (pin < 64) {
-        return s_mock_pin_values[pin];
-    }
+    (void)pin;
     return 0;
 #endif
 }

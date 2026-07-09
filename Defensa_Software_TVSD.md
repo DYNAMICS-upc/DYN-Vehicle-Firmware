@@ -1,4 +1,4 @@
-﻿# Biblia Definitiva de Defensa de Software - TVSD Formula Student
+# Biblia Definitiva de Defensa de Software - TVSD Formula Student
 
 Este documento es la **Guía Técnica de Referencia** del equipo. Su propósito es diseccionar, analizar y justificar cada línea de código, cada patrón de arquitectura y cada decisión de hardware de nuestro monoplaza eléctrico. Está diseñado para que cualquier miembro del equipo comprenda la lógica del vehículo con un nivel de profundidad absoluto.
 
@@ -30,7 +30,7 @@ Nuestra infraestructura confía en un pipeline de **Integración Continua y Desp
 1. **Push & Trigger:** Cuando un ingeniero sube una rama al repositorio, los servidores de GitHub levantan un contenedor virtual de Linux (Runner) e inicializan un entorno estéril.
 2. **Compilación Cruzada (Cross-Compilation):** El Runner instala *PlatformIO* y el *Espressif IoT Development Framework (ESP-IDF)*. Inmediatamente, compila el código fuente traduciéndolo al lenguaje ensamblador de la arquitectura Xtensa32 (el procesador de nuestras placas).
 3. **Tratamiento de Warnings como Errores (`-Werror`):** En un proyecto universitario estándar, un *warning* (aviso del compilador) es ignorado. En nuestro pipeline, hemos inyectado la *flag* `-Werror`. Si el compilador detecta una conversión de tipos dudosa (ej: meter un número de 32 bits en una variable de 16 bits), el pipeline lo considera un error fatal (*Exit Code 1*), aborta el proceso, y bloquea el botón de *Merge* (Fusión).
-4. **Validación Nativa (Unit Testing):** Tras comprobar la sintaxis, el servidor compila una segunda versión del programa para arquitectura x86_64 (el procesador del servidor) usando librerías falsas (*Mocks*). Ejecuta el framework de pruebas *Unity*, inyectando valores falsos pero extremos a las funciones matemáticas del coche (ej: pedal a fondo, error térmico simulado). Si una sola aserción matemática (`TEST_ASSERT`) falla, la revisión queda vetada.
+4. **Validación Nativa (Unit Testing):** Tras comprobar la sintaxis, el servidor compila y ejecuta el framework de pruebas *Unity* para verificar los algoritmos matemáticos y máquinas de estado del vehículo (curvas de par, gestión de potencia, plausibilidad y filtros). Si una sola aserción matemática (`TEST_ASSERT`) falla, la revisión queda vetada.
 5. **Certificación del Binario:** Solo si el código compila perfectamente para la MCU, no tiene Warnings de seguridad, y aprueba el 100% de los exámenes matemáticos, el sistema genera el archivo final certificado `firmware.bin`.
 
 **El Principio Fundacional:** *"Only verified code is deployed to the vehicle"*. Jamás flasheamos el microcontrolador desde el ordenador personal de un desarrollador. Todo binario que entra al coche ha sido certificado por el servidor.

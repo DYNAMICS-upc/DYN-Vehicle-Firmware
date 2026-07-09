@@ -1,11 +1,15 @@
 #include "r2d_manager.h"
+#include "fault_manager.h"
+
 #if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#define GET_TICKS() xTaskGetTickCount()
+#define TIME_TO_TICKS(ms) pdMS_TO_TICKS(ms)
 #else
-uint32_t mock_tick = 0;
-#define xTaskGetTickCount() (mock_tick)
-#define pdMS_TO_TICKS(ms) (ms)
+static uint32_t s_mock_tick = 0;
+#define GET_TICKS() (++s_mock_tick)
+#define TIME_TO_TICKS(ms) ((uint32_t)(ms))
 #endif
 
 static r2d_state_t s_state = R2D_STATE_OFF;
@@ -16,7 +20,8 @@ void r2d_manager_init(void) {
 }
 
 void r2d_manager_update(bool ts_active, bool brake_pressed, bool button_pressed) {
-    if (!ts_active) {
+    // SEGURIDAD: Si no hay TS o hay fallo crítico activo, R2D se bloquea permanentemente
+    if (!ts_active || fault_manager_is_high_fault_active()) {
         s_state = R2D_STATE_OFF;
         return;
     }
@@ -35,13 +40,12 @@ void r2d_manager_update(bool ts_active, bool brake_pressed, bool button_pressed)
                 s_state = R2D_STATE_WAITING_BRAKE;
             } else if (button_pressed) {
                 s_state = R2D_STATE_SOUNDING;
-                s_sound_start_time = xTaskGetTickCount();
-                // Play RTDS here (dummy)
+                s_sound_start_time = GET_TICKS();
             }
             break;
         case R2D_STATE_SOUNDING:
             // Formula Student rules require RTDS sound
-            if ((xTaskGetTickCount() - s_sound_start_time) > pdMS_TO_TICKS(2000)) {
+            if ((GET_TICKS() - s_sound_start_time) > TIME_TO_TICKS(2000)) {
                 s_state = R2D_STATE_READY;
             }
             break;

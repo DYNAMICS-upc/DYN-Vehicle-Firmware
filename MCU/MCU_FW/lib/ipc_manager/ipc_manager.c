@@ -1,4 +1,6 @@
 #include "ipc_manager.h"
+
+#if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
@@ -19,3 +21,8 @@ bool ipc_manager_receive_can_msg(mcu_can_msg_t* msg) {
     if (!s_can_tx_queue) return false;
     return xQueueReceive(s_can_tx_queue, msg, 0) == pdTRUE;
 }
+#else
+void ipc_manager_init(void) {}
+bool ipc_manager_send_can_msg(const mcu_can_msg_t* msg) { (void)msg; return true; }
+bool ipc_manager_receive_can_msg(mcu_can_msg_t* msg) { (void)msg; return false; }
+#endif
