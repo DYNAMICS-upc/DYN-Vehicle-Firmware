@@ -53,6 +53,20 @@
 #define OVERCURRENT_INSTANT_RATIO     1.70f  // > 170% Instant cut off
 #define OVERCURRENT_TIMEOUT_MS        60000U // 60 seconds (60,000 ms)
 
+// --- DIAGNOSTIC TROUBLE CODES (DTC) - CAN ID 0x501 ---
+// Critical Hardware Faults (High Priority)
+#define FAULT_CODE_OVERCURRENT_CH_BASE       0x0100U // 0x0100 to 0x010B for CH0-CH11 trip
+#define FAULT_CODE_VBAT_UNDERVOLTAGE         0x0199U // 0x0199: Battery undervoltage (<5.0V for >200ms)
+
+// Hardware Warnings & Advisory (Low Priority)
+#define FAULT_CODE_WARN_OVERCURRENT_110_BASE 0x0200U // 0x0200 to 0x020B for CH0-CH11 >110% warning
+#define FAULT_CODE_WARN_OVERCURRENT_60S_BASE 0x0300U // 0x0300 to 0x030B for CH0-CH11 140-170% 60s timer active
+
+// Communication Faults
+#define FAULT_CODE_CAN_PASSIVE_ERROR         0x0401U // CAN Error Passive
+#define FAULT_CODE_CAN_BUS_OFF               0x0402U // CAN Bus-Off Critical Error
+
 // CAN Timing
 #define CAN_INTERVAL_MS 100
+
 

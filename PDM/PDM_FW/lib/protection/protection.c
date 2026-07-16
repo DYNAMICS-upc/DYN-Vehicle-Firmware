@@ -16,6 +16,7 @@ static const float s_nominal_current[MUX_CHANNELS] = {
 
 static uint8_t  s_inv_sobre_consec = 0;    // Inverter channel (ch 9) inrush debounce
 static uint8_t  s_volant_sobre_consec = 0; // Steering/Volant channel (ch 3) inrush debounce
+static bool     s_bajo_voltaje_activo = false;
 static uint32_t s_tiempo_bajo_voltaje = 0;
 
 // Multi-tier timer and warning tracking state per channel
@@ -26,6 +27,7 @@ static bool     s_warning_active[MUX_CHANNELS] = { false };
 void protection_init(void) {
     s_inv_sobre_consec = 0;
     s_volant_sobre_consec = 0;
+    s_bajo_voltaje_activo = false;
     s_tiempo_bajo_voltaje = 0;
     for (int i = 0; i < MUX_CHANNELS; i++) {
         s_timer_active[i] = false;
@@ -70,7 +72,7 @@ protection_level_t protection_check_channel(uint8_t ch, float current_ma, uint32
         if (trip_now) {
             fault_manager_lock_channel(ch);       // 1. Permanent lockout
             mosfet_driver_set_channel(ch, false); // 2. Instant physical cutoff
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, ch + 1); // 3. Diagnostic DTC
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_OVERCURRENT_CH_BASE + ch); // 3. Diagnostic DTC
 
             s_timer_active[ch] = false;
             s_timer_start_ms[ch] = 0;
@@ -100,7 +102,7 @@ protection_level_t protection_check_channel(uint8_t ch, float current_ma, uint32
             // Start 60s countdown timer and send CAN alert / diagnostic notice
             s_timer_active[ch] = true;
             s_timer_start_ms[ch] = current_time_ms;
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, 70 + ch);
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, FAULT_CODE_WARN_OVERCURRENT_60S_BASE + ch);
         }
 
         uint32_t elapsed_ms = current_time_ms - s_timer_start_ms[ch];
@@ -108,7 +110,7 @@ protection_level_t protection_check_channel(uint8_t ch, float current_ma, uint32
             // 60s expired without dropping <= 110% -> Cut off & Lockout
             fault_manager_lock_channel(ch);
             mosfet_driver_set_channel(ch, false);
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, ch + 1);
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_OVERCURRENT_CH_BASE + ch);
 
             s_timer_active[ch] = false;
             s_timer_start_ms[ch] = 0;
@@ -132,7 +134,7 @@ protection_level_t protection_check_channel(uint8_t ch, float current_ma, uint32
             if (elapsed_ms >= OVERCURRENT_TIMEOUT_MS) {
                 fault_manager_lock_channel(ch);
                 mosfet_driver_set_channel(ch, false);
-                fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, ch + 1);
+                fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_OVERCURRENT_CH_BASE + ch);
 
                 s_timer_active[ch] = false;
                 s_timer_start_ms[ch] = 0;
@@ -143,7 +145,7 @@ protection_level_t protection_check_channel(uint8_t ch, float current_ma, uint32
         }
 
         // Timer not active: advisory warning message / CAN notification
-        fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, 50 + ch);
+        fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, FAULT_CODE_WARN_OVERCURRENT_110_BASE + ch);
         return PROT_LEVEL_WARNING_110;
     }
 
@@ -265,17 +267,19 @@ bool protection_check_battery(float *out_vbat_actual, uint32_t current_time_ms) 
     }
 
     if (vbat < VBAT_MIN_LIMIT_V) {
-        if (s_tiempo_bajo_voltaje == 0) {
+        if (!s_bajo_voltaje_activo) {
+            s_bajo_voltaje_activo = true;
             s_tiempo_bajo_voltaje = current_time_ms;
-        } else if (current_time_ms - s_tiempo_bajo_voltaje > VBAT_UNDERVOLTAGE_DEBOUNCE_MS) {
+        } else if ((current_time_ms - s_tiempo_bajo_voltaje) >= VBAT_UNDERVOLTAGE_DEBOUNCE_MS) {
             for (int i = 0; i < MUX_CHANNELS; i++) {
                 fault_manager_lock_channel(i);
             }
             mosfet_driver_set_all(false); // Cortar todo
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 99); // Error 99: Subtensión Batería
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_VBAT_UNDERVOLTAGE); // DTC 0x0199: Subtensión Batería
             return false; // Tripped
         }
     } else {
+        s_bajo_voltaje_activo = false;
         s_tiempo_bajo_voltaje = 0;
     }
 

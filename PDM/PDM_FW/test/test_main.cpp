@@ -271,6 +271,10 @@ void test_protection_check_battery_undervoltage_debounce(void) {
         TEST_ASSERT_TRUE(fault_manager_is_channel_locked(i));
     }
     TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+    fault_record_t rec = fault_manager_get_last_fault();
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, rec.category);
+    TEST_ASSERT_EQUAL(FAULT_PRIORITY_HIGH, rec.priority);
+    TEST_ASSERT_EQUAL_UINT32(FAULT_CODE_VBAT_UNDERVOLTAGE, rec.code);
 }
 
 void test_protection_process_shunts_and_mux_and_hall(void) {
@@ -286,6 +290,30 @@ void test_protection_process_shunts_and_mux_and_hall(void) {
     protection_process_hall_sensors(consumos);
     TEST_ASSERT_EQUAL_UINT16(0, consumos[12]);
     TEST_ASSERT_EQUAL_UINT16(0, consumos[13]);
+}
+
+void test_dtc_error_codes_mapping(void) {
+    // 1. Tier 1 Warning DTC (Low Priority, 0x0200 + ch)
+    protection_check_channel(1, 2300.0f, 100); // Nominal 2000 -> 115%
+    fault_record_t rec = fault_manager_get_last_fault();
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, rec.category);
+    TEST_ASSERT_EQUAL(FAULT_PRIORITY_LOW, rec.priority);
+    TEST_ASSERT_EQUAL_UINT32(FAULT_CODE_WARN_OVERCURRENT_110_BASE + 1, rec.code);
+
+    // 2. Tier 2 Timer Start DTC (Low Priority, 0x0300 + ch)
+    protection_check_channel(4, 3000.0f, 100); // Nominal 2000 -> 150%
+    rec = fault_manager_get_last_fault();
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, rec.category);
+    TEST_ASSERT_EQUAL(FAULT_PRIORITY_LOW, rec.priority);
+    TEST_ASSERT_EQUAL_UINT32(FAULT_CODE_WARN_OVERCURRENT_60S_BASE + 4, rec.code);
+
+    // 3. Tier 3 Instant Trip DTC (High Priority, 0x0100 + ch)
+    protection_check_channel(2, 3800.0f, 100); // Nominal 2000 -> 190%
+    rec = fault_manager_get_last_fault();
+    TEST_ASSERT_EQUAL(FAULT_CAT_HARDWARE, rec.category);
+    TEST_ASSERT_EQUAL(FAULT_PRIORITY_HIGH, rec.priority);
+    TEST_ASSERT_EQUAL_UINT32(FAULT_CODE_OVERCURRENT_CH_BASE + 2, rec.code);
+    TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
 }
 
 int main(int argc, char **argv) {
@@ -306,6 +334,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_protection_persistence_reset_on_recovery);
     RUN_TEST(test_protection_check_battery_undervoltage_debounce);
     RUN_TEST(test_protection_process_shunts_and_mux_and_hall);
+    RUN_TEST(test_dtc_error_codes_mapping);
     RUN_TEST(test_fault_manager_records_and_clearing);
     return UNITY_END();
 }

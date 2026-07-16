@@ -64,11 +64,11 @@ void can_service_check_alerts(void) {
         twai_get_status_info(&twaistatus);
 
         if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
-            fault_manager_report(FAULT_CAT_COMMUNICATION, FAULT_PRIORITY_LOW, 1);
+            fault_manager_report(FAULT_CAT_COMMUNICATION, FAULT_PRIORITY_LOW, FAULT_CODE_CAN_PASSIVE_ERROR);
         }
         if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
             if (twaistatus.bus_error_count > 50) {
-                fault_manager_report(FAULT_CAT_COMMUNICATION, FAULT_PRIORITY_HIGH, 2);
+                fault_manager_report(FAULT_CAT_COMMUNICATION, FAULT_PRIORITY_HIGH, FAULT_CODE_CAN_BUS_OFF);
             }
         }
     }
