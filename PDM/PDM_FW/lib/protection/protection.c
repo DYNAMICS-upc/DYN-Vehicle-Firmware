@@ -6,7 +6,6 @@
 
 #if defined(ESP_PLATFORM)
 #include "esp_log.h"
-static const char *TAG = "PDM_PROT";
 #endif
 
 // Nominal Currents (mA) for each of the 12 channels

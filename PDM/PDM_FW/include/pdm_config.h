@@ -46,5 +46,13 @@
 #define VBAT_MIN_LIMIT_V 5.0f
 #define VBAT_UNDERVOLTAGE_DEBOUNCE_MS 200
 
+// --- MULTI-TIER OVERCURRENT PROTECTION LIMITS ---
+#define OVERCURRENT_WARN_RATIO        1.10f  // 110% (+10% threshold for alert message)
+#define OVERCURRENT_TIMER_LOW_RATIO   1.40f  // 140% of nominal (starts 60s timer)
+#define OVERCURRENT_TIMER_HIGH_RATIO  1.70f  // 170% of nominal (upper bound for 60s timer)
+#define OVERCURRENT_INSTANT_RATIO     1.70f  // > 170% Instant cut off
+#define OVERCURRENT_TIMEOUT_MS        60000U // 60 seconds (60,000 ms)
+
 // CAN Timing
 #define CAN_INTERVAL_MS 100
+

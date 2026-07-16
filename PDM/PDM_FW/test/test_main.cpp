@@ -236,6 +236,57 @@ void test_fault_manager_records_and_clearing(void) {
     fault_manager_clear_all();
     TEST_ASSERT_FALSE(fault_manager_is_high_fault_active());
 }
+void test_protection_check_channel_instant_wrapper(void) {
+    // Under 110% nominal (safe): Returns true
+    TEST_ASSERT_TRUE(protection_check_channel_instant(0, 1500.0f));
+    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
+
+    // Range 1 (120% nominal): Returns true (channel remains active)
+    TEST_ASSERT_TRUE(protection_check_channel_instant(0, 2400.0f));
+    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
+
+    // Range 3 (> 170% nominal on Channel 0): Returns false (instant trip)
+    TEST_ASSERT_FALSE(protection_check_channel_instant(0, 3600.0f));
+    TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(0));
+    TEST_ASSERT_TRUE(fault_manager_is_channel_locked(0));
+}
+
+void test_protection_check_battery_undervoltage_debounce(void) {
+    float vbat = 0.0f;
+
+    // In native simulation, mux_adc_driver_read_pin returns 0 -> vbat = 0.0V (< 5.0V)
+    // First sample at t = 0 ms: starts debounce timer, returns true (not yet tripped)
+    TEST_ASSERT_TRUE(protection_check_battery(&vbat, 0));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, vbat);
+    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
+
+    // Sample at t = 100 ms (< 200 ms debounce limit): still OK
+    TEST_ASSERT_TRUE(protection_check_battery(&vbat, 100));
+    TEST_ASSERT_EQUAL_UINT8(1, mosfet_driver_get_status(0));
+
+    // Sample at t = 250 ms (> 200 ms debounce limit): TRIPS all channels!
+    TEST_ASSERT_FALSE(protection_check_battery(&vbat, 250));
+    for (int i = 0; i < MUX_CHANNELS; i++) {
+        TEST_ASSERT_EQUAL_UINT8(0, mosfet_driver_get_status(i));
+        TEST_ASSERT_TRUE(fault_manager_is_channel_locked(i));
+    }
+    TEST_ASSERT_TRUE(fault_manager_is_high_fault_active());
+}
+
+void test_protection_process_shunts_and_mux_and_hall(void) {
+    uint16_t consumos[TOTAL_LOADS] = { 0 };
+
+    // Process shunts and mux without crashing
+    protection_process_shunts_and_mux(consumos, 1000);
+    for (int i = 0; i < MUX_CHANNELS; i++) {
+        TEST_ASSERT_EQUAL_UINT16(0, consumos[i]); // Native ADC reads 0
+    }
+
+    // Process Hall sensors
+    protection_process_hall_sensors(consumos);
+    TEST_ASSERT_EQUAL_UINT16(0, consumos[12]);
+    TEST_ASSERT_EQUAL_UINT16(0, consumos[13]);
+}
 
 int main(int argc, char **argv) {
     (void)argc;
@@ -248,10 +299,13 @@ int main(int argc, char **argv) {
     RUN_TEST(test_protection_range2_timer_expired_trips_and_locks_channel);
     RUN_TEST(test_protection_range2_hysteresis_does_not_reset_if_above_110_percent);
     RUN_TEST(test_protection_range3_instant_trip_above_170_percent);
+    RUN_TEST(test_protection_check_channel_instant_wrapper);
     RUN_TEST(test_protection_warning_and_timer_masks);
     RUN_TEST(test_protection_inverter_persistence_3_samples);
     RUN_TEST(test_protection_volant_persistence_3_samples);
     RUN_TEST(test_protection_persistence_reset_on_recovery);
+    RUN_TEST(test_protection_check_battery_undervoltage_debounce);
+    RUN_TEST(test_protection_process_shunts_and_mux_and_hall);
     RUN_TEST(test_fault_manager_records_and_clearing);
     return UNITY_END();
 }
