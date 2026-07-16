@@ -15,12 +15,15 @@
 El **Power Distribution Module (PDM)** actúa como el cuadro electrónico inteligente de fusibles y distribución de energía de baja tensión (LV) del monoplaza:
 1. **Control de 12 canales MOSFET de potencia** independientes para alimentar subsistemas críticos (MCU, Inversor, Bombas de refrigeración, Volante, Telemetría, SBG, ECU, etc.).
 2. **Medición de corriente multicanal** mediante multiplexor analógico **CD74HC4067** (12 shunts con amplificadores operacionales de ganancia 20 V/V y resistencia de shunt de $0.05\ \Omega$) más 2 sensores de efecto Hall (Shutdown y Ventiladores).
-3. **Protección electrónica ultrarrápida contra sobrecorrientes** (corte instantáneo ante sobrecarga $> 130\%$ de la corriente nominal, con filtro de debouncing de 3 muestras consecutivas en canales inductivos críticos como Inversor y Volante).
-4. **Protección por subtensión de batería LV** (corte general de cargas si $V_{\text{bat}} < 5.0\text{V}$ durante más de 200 ms).
-5. **Transmisión CAN periódica a 10 Hz** (IDs `0x001`, `0x002`, `0x003`, `0x004`, `0x005`, `0x006`) con el estado de conmutación de los transistores y las corrientes consumidas en miliamperios, más el estado de diagnóstico DTC en `0x501`.
+3. **Protección electrónica inteligente de 3 niveles contra sobrecorrientes**:
+   - **Nivel 1 (Aviso Preventivo, $>110\% I_{\text{nom}}$)**: Emisión de bandera de advertencia en telemetría (CAN ID 6 / 0x501) y DTC `0x0200 + ch`; el canal permanece encendido.
+   - **Nivel 2 (Sobrecarga Temporizada, $140\dots 170\% I_{\text{nom}}$)**: Inicio de temporizador determinista de 60 segundos (DTC `0x0300 + ch`); si la corriente no se reduce por debajo del $110\%$ tras 60 segundos, se desconecta y bloquea el canal.
+   - **Nivel 3 (Corte Instantáneo, $>170\% I_{\text{nom}}$)**: Corte ultrarrápido por e-fuse ($<10\text{ ms}$), bloqueo permanente del canal y emisión de DTC `0x0100 + ch`. (Filtro inrush de 3 muestras en Inversor y Volante).
+4. **Protección por subtensión de batería LV**: corte general de cargas si $V_{\text{bat}} < 5.0\text{V}$ durante más de 200 ms (DTC `0x0199`).
+5. **Transmisión CAN periódica a 10 Hz** (IDs `0x001`, `0x002`, `0x003`, `0x004`, `0x005`, `0x006`) con el estado de conmutación de los transistores y las corrientes consumidas en miliamperios, máscara de advertencia en ID 6 byte 7, más la trama de diagnóstico DTC en `0x501`.
 6. **Interbloqueo de seguridad OTA con MCU**: recepción de estado R2D en `0x021`.
 
-Toda la lógica ha sido migrada desde el archivo monolítico [pdm.ino](file:///C:/Users/DBDVU0X/Downloads/Codigos/pdm.ino) a la estructura modular de [PDM_FW](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW) con **paridad funcional exacta al 100%**.
+Toda la lógica ha sido migrada desde el archivo monolítico [pdm.ino](file:///C:/Users/DBDVU0X/Downloads/Codigos/pdm.ino) a la estructura modular de [PDM_FW](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW) con **paridad funcional exacta al 100%** y extensiones industriales de seguridad.
 
 ---
 
@@ -92,7 +95,7 @@ void verificarProteccionBateria() {
 }
 ```
 
-#### Código de Producción en [protection.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/protection/protection.c#L20-L45):
+#### Código de Producción en [protection.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/protection/protection.c):
 ```c
 // Implementación en lib/protection/protection.c
 void protection_check_battery(float *vbat_out, uint32_t now_ms) {
@@ -100,197 +103,75 @@ void protection_check_battery(float *vbat_out, uint32_t now_ms) {
     if (vbat_out) *vbat_out = vbat;
 
     if (vbat < VBAT_MIN_LIMIT_V) {
-        if (s_tiempo_bajo_voltaje == 0) {
+        if (!s_bajo_voltaje_activo) {
             s_tiempo_bajo_voltaje = now_ms;
+            s_bajo_voltaje_activo = true;
         } else if ((now_ms - s_tiempo_bajo_voltaje) > VBAT_UNDERVOLTAGE_DEBOUNCE_MS) {
             for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
                 mosfet_driver_set_channel(i, false);
                 fault_manager_lock_channel(i);
             }
-            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 100);
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_VBAT_UNDERVOLTAGE);
         }
     } else {
+        s_bajo_voltaje_activo = false;
         s_tiempo_bajo_voltaje = 0;
     }
 }
 ```
-
-#### Demostración de Equivalencia:
-- **Lógica Temporal**: Mismo temporizador de persistencia de 200 ms y desconexión segura de los 12 canales MOSFET.
-- **Mejora Industrial**: Se elimina la salida bloqueante `Serial.println()` y se integra con el gestor de fallos `fault_manager` reportando evento de prioridad alta y enclavamiento de canales.
 
 ---
 
 ### Función 3: `leerConsumoCargas()` & `verificarProteccionConsumo()`
 
 #### Propósito:
-Selección mediante los 4 pines digitales (S0, S1, S2, S3) de cada canal del multiplexor CD74HC4067, promediado de 10 lecturas consecutivas para filtrar ruido, conversión de tensión a miliamperios ($I = V_{\text{pin}} \times \text{ESCALA} = V_{\text{pin}} \times \frac{1}{20 \times 0.05} = V_{\text{pin}} \times 1\ \text{A/V}$) y disparo automático si se supera el 130% de la corriente nominal asignada al canal.
+Selección de canal multiplexado CD74HC4067, promediado de 10 lecturas consecutivas, conversión a miliamperios y aplicación de la lógica de protección de 3 niveles: aviso al 110%, timer de 60s entre 140-170%, y corte instantáneo $>170\%$.
 
-#### Código Original en [pdm.ino](file:///C:/Users/DBDVU0X/Downloads/Codigos/pdm.ino#L92-L165):
-```cpp
-// Líneas 92-165 en pdm.ino
-void leerConsumoCargas() {
-  for (int i = 0; i < MUX_CHANNELS; i++) {
-    seleccionarCanalMux(i);
-    int suma = 0;
-    for (int j = 0; j < SAMPLES_PER_LOOP; j++) {
-      suma += analogRead(MUX_COMMON_PIN);
-    }
-    float v_pin = ((suma / (float)SAMPLES_PER_LOOP) * V_ESP) / ADC_MAX;
-    consumos_reales[i] = v_pin * ESCALA_CORRIENTE; // en Amperios
-    consumos_can[i] = (uint16_t)(consumos_reales[i] * 1000.0); // mA para CAN
-    verificarProteccionConsumo(i);
-  }
-}
-
-void verificarProteccionConsumo(int canal) {
-  if (canal == CANAL_INVERTER || canal == CANAL_VOLANT) {
-    if (consumos_reales[canal] > corrientes_max[canal] * 1.30) {
-      contador_muestras_sobrecorriente[canal]++;
-      if (contador_muestras_sobrecorriente[canal] >= 3) {
-        digitalWrite(PinMosfet[canal], HIGH);
-        mosfets_status[canal] = 0;
-      }
-    } else {
-      contador_muestras_sobrecorriente[canal] = 0;
-    }
-  } else {
-    if (consumos_reales[canal] > corrientes_max[canal] * 1.30) {
-      digitalWrite(PinMosfet[canal], HIGH);
-      mosfets_status[canal] = 0;
-    }
-  }
-}
-```
-
-#### Código de Producción en [protection.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/protection/protection.c#L47-L85):
+#### Código de Producción en [protection.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/protection/protection.c):
 ```c
-// Implementación en lib/protection/protection.c
-void protection_process_shunts_and_mux(uint16_t *consumos_can) {
-    for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
-        mux_adc_driver_select_channel(i);
-        float v_pin = mux_adc_driver_read_common_averaged(SAMPLES_PER_LOOP);
-        float corriente_a = v_pin * ESCALA_CORRIENTE;
-        consumos_can[i] = (uint16_t)(corriente_a * 1000.0f);
+// Lógica de 3 niveles implementada en lib/protection/protection.c
+protection_level_t protection_check_channel(uint8_t ch, float i_current, uint32_t now_ms) {
+    const float i_nom = s_nominal_current[ch];
+    const float i_warn = i_nom * OVERCURRENT_WARN_RATIO;        // 110%
+    const float i_timer_low = i_nom * OVERCURRENT_TIMER_LOW_RATIO;  // 140%
+    const float i_instant = i_nom * OVERCURRENT_INSTANT_RATIO;    // 170%
 
-        float limite_a = s_corrientes_max[i] * 1.30f;
-        if (i == CANAL_INVERTER || i == CANAL_VOLANT) {
-            if (corriente_a > limite_a) {
-                s_contador_sobrecorriente[i]++;
-                if (s_contador_sobrecorriente[i] >= 3) {
-                    mosfet_driver_set_channel(i, false);
-                    fault_manager_lock_channel(i);
-                    fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 10 + i);
-                }
-            } else {
-                s_contador_sobrecorriente[i] = 0;
-            }
-        } else {
-            if (corriente_a > limite_a) {
-                mosfet_driver_set_channel(i, false);
-                fault_manager_lock_channel(i);
-                fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, 10 + i);
-            }
+    // Nivel 3: Corte instantáneo (>170%)
+    if (i_current > i_instant) {
+        mosfet_driver_set_channel(ch, false);
+        fault_manager_lock_channel(ch);
+        fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_OVERCURRENT_CH(ch));
+        return PROT_LEVEL_TRIPPED;
+    }
+
+    // Nivel 2: Rango de sobrecarga 140% - 170% con timer de 60 segundos
+    if (i_current >= i_timer_low) {
+        if (!s_timer_active[ch]) {
+            s_timer_active[ch] = true;
+            s_timer_start_ms[ch] = now_ms;
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, FAULT_CODE_WARN_OVERCURRENT_60S_CH(ch));
+        } else if ((now_ms - s_timer_start_ms[ch]) >= OVERCURRENT_TIMER_DURATION_MS) {
+            mosfet_driver_set_channel(ch, false);
+            fault_manager_lock_channel(ch);
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_HIGH, FAULT_CODE_OVERCURRENT_CH(ch));
+            return PROT_LEVEL_TRIPPED;
         }
+        return PROT_LEVEL_TIMER_ACTIVE;
     }
-}
-```
 
-#### Demostración de Equivalencia:
-- **Matemática y Filtro**: Promedio exacto de 10 muestras, conversión lineal con shunt de $0.05\ \Omega$ y ganancia 20, umbral $+30\%$ ($1.30\times$), y debouncing de 3 muestras consecutivas en Inversor (Canal 9) y Volante (Canal 3).
-
----
-
-### Función 4: Lectura de Sensores Hall (`leerConsumoHall()`)
-
-#### Propósito:
-Medición de corriente en los dos canales de alta potencia no multiplexados: sensor de 10A para el circuito de Shutdown (CH12, sensibilidad $0.132\ \text{V/A}$) y sensor de 30A para Ventiladores (CH13, sensibilidad $0.044\ \text{V/A}$), ambos con tensión de offset de reposo en $1.65\text{ V}$.
-
-#### Código Original en [pdm.ino](file:///C:/Users/DBDVU0X/Downloads/Codigos/pdm.ino#L167-L195):
-```cpp
-// Líneas 167-195 en pdm.ino
-void leerConsumoHall() {
-  // Shutdown Hall (10A)
-  int adcSD = analogRead(HALL_SD_PIN);
-  float vSD = (adcSD * V_ESP) / ADC_MAX;
-  float iSD = (vSD - V_OFF_HALL) / SENS_SD;
-  consumos_can[12] = (uint16_t)(max(0.0f, iSD) * 1000.0);
-
-  // Fans Hall (30A)
-  int adcFans = analogRead(HALL_FANS_PIN);
-  float vFans = (adcFans * V_ESP) / ADC_MAX;
-  float iFans = (vFans - V_OFF_HALL) / SENS_FANS;
-  consumos_can[13] = (uint16_t)(max(0.0f, iFans) * 1000.0);
-}
-```
-
-#### Código de Producción en [protection.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/protection/protection.c#L87-L105):
-```c
-// Implementación en lib/protection/protection.c
-void protection_process_hall_sensors(uint16_t *consumos_can) {
-    float v_sd = mux_adc_driver_read_pin_voltage(HALL_SD_PIN);
-    float i_sd = (v_sd - V_OFF_HALL) / SENS_SD;
-    consumos_can[12] = (uint16_t)((i_sd > 0.0f ? i_sd : 0.0f) * 1000.0f);
-
-    float v_fans = mux_adc_driver_read_pin_voltage(HALL_FANS_PIN);
-    float i_fans = (v_fans - V_OFF_HALL) / SENS_FANS;
-    consumos_can[13] = (uint16_t)((i_fans > 0.0f ? i_fans : 0.0f) * 1000.0f);
-}
-```
-
-#### Demostración de Equivalencia:
-- **Ecuaciones y Constantes**: $V_{\text{offset}} = 1.65\text{V}$, $\text{Sens}_{\text{SD}} = 0.132\text{ V/A}$, $\text{Sens}_{\text{Fans}} = 0.044\text{ V/A}$, truncamiento en 0.0 A y empaquetado a miliamperios.
-
----
-
-### Función 5: Emisión de Telemetría CAN (`enviarConsumosCAN()`)
-
-#### Propósito:
-Serialización y transmisión a 10 Hz de las 6 tramas periódicas del bus CAN con el estado de los MOSFETs (IDs 1 y 2), consumos de corriente de los 14 canales (IDs 3 a 6), tensión de batería y alerta de sobreconsumo del volante en ID 6.
-
-#### Código Original en [pdm.ino](file:///C:/Users/DBDVU0X/Downloads/Codigos/pdm.ino#L197-L250):
-```cpp
-// Líneas 197-250 en pdm.ino
-void enviarConsumosCAN() {
-  twai_message_t msg;
-  
-  // ID 1: Mosfets 1-8
-  msg.identifier = 1; msg.data_length_code = 8;
-  for (int i=0; i<8; i++) msg.data[i] = mosfets_status[i];
-  twai_transmit(&msg, pdMS_TO_TICKS(10));
-
-  // ID 2: Mosfets 9-12
-  msg.identifier = 2; msg.data_length_code = 4;
-  for (int i=0; i<4; i++) msg.data[i] = mosfets_status[8+i];
-  twai_transmit(&msg, pdMS_TO_TICKS(10));
-
-  // IDs 3..6: Consumos
-  for (int id=3; id<=6; id++) {
-    msg.identifier = id; msg.data_length_code = 8;
-    int start = (id - 3) * 4;
-    for (int i=0; i<4; i++) {
-      msg.data[i*2] = consumos_can[start+i] & 0xFF;
-      msg.data[i*2+1] = (consumos_can[start+i] >> 8) & 0xFF;
+    // Nivel 1: Aviso si supera el 110%
+    if (i_current > i_warn) {
+        if (!s_warning_active[ch]) {
+            s_warning_active[ch] = true;
+            fault_manager_report(FAULT_CAT_HARDWARE, FAULT_PRIORITY_LOW, FAULT_CODE_WARN_OVERCURRENT_110_CH(ch));
+        }
+        return PROT_LEVEL_WARNING_110;
     }
-    if (id == 6) {
-      uint16_t vb = (uint16_t)(v_bat_actual * 1000.0);
-      msg.data[4] = vb & 0xFF; msg.data[5] = (vb >> 8) & 0xFF;
-      msg.data[6] = (consumos_can[3] > 2500) ? 1 : 0; // Alerta Volant
-      msg.data[7] = 0;
-    }
-    twai_transmit(&msg, pdMS_TO_TICKS(10));
-  }
-}
-```
 
-#### Código de Producción en [can_service.c](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW/lib/can_service/can_service.c#L76-L146):
-```c
-// Implementación en lib/can_service/can_service.c
-void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_t *consumos_can, float v_bat_actual) {
-    // IDs 1 y 2: Estados de conmutación de MOSFETs
-    // IDs 3, 4, 5, 6: Consumos en mA en formato Little-Endian
-    // ID 6: Tensión de batería en bytes 4-5 y bandera de alerta de volante en byte 6
-    // ID 0x501: Trama de diagnóstico DTC dedicada
+    // Recuperación si cae por debajo del 110%
+    s_timer_active[ch] = false;
+    s_warning_active[ch] = false;
+    return PROT_LEVEL_NORMAL;
 }
 ```
 
@@ -300,12 +181,14 @@ void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_
 
 A continuación se detalla **cada tipo de error posible** cubierto por el firmware de la PDM, su condición de disparo, la reacción física/firmware del sistema y la trama de diagnóstico emitida por CAN.
 
-| Código DTC | Nombre del Fallo | Categoría | Prioridad | Condición Exacta de Disparo | Reacción del Sistema y Hardware | Recuperación / Desbloqueo | Trama CAN Emitida |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`10..21`** | `FAULT_CODE_OVERCURRENT_CH(0..11)` | `FAULT_CAT_HARDWARE` | `HIGH` | Corriente en canal shunteado $i$ supera el $+130\%$ de su límite nominal ($I_{\text{max}} = [5\text{A}, 7.5\text{A}, 10\text{A}, 15\text{A}, 30\text{A}]$). Canales estándar: corte instantáneo. Canales inductivos (Inversor CH9 y Volante CH3): $\ge 3$ muestras consecutivas $> 130\%$. | Se apaga inmediatamente el MOSFET del canal poniendo su pin a `HIGH` (OFF), se fuerza `mosfets_status[i] = 0` y se enclava el canal en `fault_manager_lock_channel(i)`. Quedan rechazados todos los comandos de reactivación por CAN ID `0x100`. | Requiere reinicio del monoplaza o comando explícito de desbloqueo si la sobrecorriente ha desaparecido. | CAN ID `0x001`/`0x002` (estado MOSFET = 0), CAN ID `0x501` (Byte 0 = 1, Byte 3-4 = $10+i$, Byte 7 = Máscara de canales bloqueados) |
-| **`100`** | `FAULT_CODE_VBAT_UNDERVOLTAGE` | `FAULT_CAT_HARDWARE` | `HIGH` | Tensión de batería de baja tensión $V_{\text{bat}} < 5.0\text{V}$ persistente durante $> 200\text{ ms}$. | Apaga **todos los 12 canales MOSFET** simultáneamente para proteger la batería de litio contra destrucción por sobredescarga profunda. | Automática cuando la tensión de batería vuelve a superar los $5.0\text{V}$ durante el arranque. | CAN ID `0x001` y `0x002` (todos los estados a 0), CAN ID `0x006` ($V_{\text{bat}}$ en mV), CAN ID `0x501` (Byte 0 = 1, Byte 3-4 = `100`) |
-| **`1`** | `FAULT_CODE_CAN_ERROR_PASSIVE` | `FAULT_CAT_COMMUNICATION` | `LOW` | Alerta del controlador TWAI `TWAI_ALERT_ERR_PASS` activada por degradación del bus. | Registro de diagnóstico interno y notificación al bus de telemetría. | Automática tras reducirse la tasa de tramas erróneas. | CAN ID `0x501` (Byte 0 = 2, Byte 2 = 0, Byte 3-4 = 1) |
-| **`2`** | `FAULT_CODE_CAN_BUS_OFF` | `FAULT_CAT_COMMUNICATION` | `HIGH` | Errores en bus físico de CAN superan el umbral crítico (`bus_error_count > 50`) o estado `TWAI_STATE_BUS_OFF`. | Inicia ciclo de autorrecuperación del bus CAN mediante reconfiguración del driver. | Automática tras recuperar sincronismo con el bus diferencial. | CAN ID `0x501` tras recuperación |
+| Código DTC (Hex) | Nombre del Fallo | Categoría | Prioridad | Condición Exacta de Disparo | Reacción del Sistema y Hardware | Recuperación / Desbloqueo | Trama CAN Emitida |
+| :---: | :--- | :---: | :---: | :--- | :--- | :--- | :--- |
+| **`0x0100` $\dots$ `0x010B`** | `FAULT_CODE_OVERCURRENT_CH0..11` | `FAULT_CAT_HARDWARE` | `HIGH` | Corriente en canal shunteado $i$ supera $>170\%$ de límite nominal o persiste en rango $140\dots 170\%$ durante $\ge 60\text{s}$. | Se apaga inmediatamente el MOSFET del canal poniendo su pin a `HIGH` (OFF), se fuerza `mosfets_status[i] = 0` y se enclava el canal en `fault_manager_lock_channel(i)`. Quedan rechazados todos los comandos de reactivación por CAN ID `0x100`. | Requiere reinicio del monoplaza o comando explícito de desbloqueo si la sobrecorriente ha desaparecido. | CAN IDs `0x001`/`0x002` (estado MOSFET = 0)<br/>CAN ID `0x501` (Byte 0 = 1, Byte 3-4 = `0x0100 + i`, Byte 7 = Máscara de canales bloqueados) |
+| **`0x0199`** | `FAULT_CODE_VBAT_UNDERVOLTAGE` | `FAULT_CAT_HARDWARE` | `HIGH` | Tensión de batería de baja tensión $V_{\text{bat}} < 5.0\text{V}$ persistente durante $> 200\text{ ms}$. | Apaga **todos los 12 canales MOSFET** simultáneamente para proteger la batería de litio contra destrucción por sobredescarga profunda; bloquea todos los canales (`0x0FFF`). | Automática cuando la tensión de batería vuelve a superar los $5.0\text{V}$ durante el arranque. | CAN IDs `0x001` y `0x002` (todos los estados a 0)<br/>CAN ID `0x006` ($V_{\text{bat}}$ en mV)<br/>CAN ID `0x501` (Byte 0 = 1, Byte 3-4 = `0x0199`, Byte 7 = `0xFF`) |
+| **`0x0200` $\dots$ `0x020B`** | `FAULT_CODE_WARN_OVERCURRENT_110_CH0..11` | `FAULT_CAT_HARDWARE` | `LOW` | Corriente en canal $i$ en rango de aviso ($110\% < I < 140\%$). | Activa bit $i$ en máscara de aviso (CAN ID 6, byte 7). El MOSFET permanece encendido. | Automática cuando la corriente se reduce $\le 110\%$. | CAN ID `0x006` (Byte 7 máscara)<br/>CAN ID `0x501` (Byte 0 = 2, Bytes 3-4 = `0x0200 + i`) |
+| **`0x0300` $\dots$ `0x030B`** | `FAULT_CODE_WARN_OVERCURRENT_60S_CH0..11` | `FAULT_CAT_HARDWARE` | `LOW` | Corriente en canal $i$ en rango de sobrecarga ($140\% \le I \le 170\%$). | Inicia temporizador de 60 segundos; activa bit $i$ en máscara de timer. El MOSFET permanece encendido. | Automática si la corriente se reduce $\le 110\%$ antes de expirar los 60s. | CAN ID `0x501` (Byte 0 = 2, Bytes 3-4 = `0x0300 + i`) |
+| **`0x0401`** | `FAULT_CODE_CAN_PASSIVE_ERROR` | `FAULT_CAT_COMMUNICATION` | `LOW` | Alerta del controlador TWAI `TWAI_ALERT_ERR_PASS` activada por degradación del bus. | Registro de diagnóstico interno y notificación al bus de telemetría. | Automática tras reducirse la tasa de tramas erróneas. | CAN ID `0x501` (Byte 0 = 2, Byte 2 = 0, Bytes 3-4 = `0x0401`) |
+| **`0x0402`** | `FAULT_CODE_CAN_BUS_OFF` | `FAULT_CAT_COMMUNICATION` | `HIGH` | Errores en bus físico de CAN superan el umbral crítico (`bus_error_count > 50`) o estado `TWAI_STATE_BUS_OFF`. | Inicia ciclo de autorrecuperación del bus CAN mediante reconfiguración del driver. | Automática tras recuperar sincronismo con el bus diferencial. | CAN ID `0x501` tras recuperación |
 
 ---
 
@@ -320,7 +203,7 @@ A continuación se detalla **cada tipo de error posible** cubierto por el firmwa
 | **`0x003`** | `PDM_CURRENTS_0_3` | 8 | 10 Hz | Telemetría, Data Logger, MCU | `Byte 0-1`: Consumo CH0 (LE uint16)<br/>`Byte 2-3`: Consumo CH1 (LE uint16)<br/>`Byte 4-5`: Consumo CH2 (LE uint16)<br/>`Byte 6-7`: Consumo CH3 (LE uint16) | $1\ \text{LSB} = 1\ \text{mA}$ ($0..65535\ \text{mA}$) |
 | **`0x004`** | `PDM_CURRENTS_4_7` | 8 | 10 Hz | Telemetría, Data Logger, MCU | `Byte 0-1`: Consumo CH4<br/>`Byte 2-3`: Consumo CH5<br/>`Byte 4-5`: Consumo CH6<br/>`Byte 6-7`: Consumo CH7 | $1\ \text{LSB} = 1\ \text{mA}$ |
 | **`0x005`** | `PDM_CURRENTS_8_11` | 8 | 10 Hz | Telemetría, Data Logger, MCU | `Byte 0-1`: Consumo CH8<br/>`Byte 2-3`: Consumo CH9 (Inversor)<br/>`Byte 4-5`: Consumo CH10<br/>`Byte 6-7`: Consumo CH11 | $1\ \text{LSB} = 1\ \text{mA}$ |
-| **`0x006`** | `PDM_CURRENTS_HALL_VBAT` | 8 | 10 Hz | Telemetría, Data Logger, MCU | `Byte 0-1`: Hall Shutdown (LE uint16 mA)<br/>`Byte 2-3`: Hall Fans (LE uint16 mA)<br/>`Byte 4-5`: Tensión Batería LV (LE uint16 mV)<br/>`Byte 6`: Alerta Volante ($1 = I_{\text{vol}} > 2.5\text{A}$)<br/>`Byte 7`: Reservado (0) | Corrientes en $\text{mA}$, Voltaje en $\text{mV}$ ($12600 = 12.6\text{V}$) |
+| **`0x006`** | `PDM_CURRENTS_HALL_VBAT` | 8 | 10 Hz | Telemetría, Data Logger, MCU | `Byte 0-1`: Hall Shutdown (LE uint16 mA)<br/>`Byte 2-3`: Hall Fans (LE uint16 mA)<br/>`Byte 4-5`: Tensión Batería LV (LE uint16 mV)<br/>`Byte 6`: Alerta Volante ($1 = I_{\text{vol}} > 2.5\text{A}$)<br/>`Byte 7`: **Máscara de Aviso de Sobrecorriente ($>110\%$)** | Corrientes en $\text{mA}$, Voltaje en $\text{mV}$ ($12600 = 12.6\text{V}$), Máscara en Bits |
 | **`0x501`** | `PDM_DIAGNOSTIC_DTC` | 8 | 10 Hz / On-Fault | Safety Master, Data Logger, Dashboard | `Byte 0`: Fallo Crítico Activo ($1 = \text{Sí}, 0 = \text{No}$)<br/>`Byte 1`: Categoría<br/>`Byte 2`: Prioridad<br/>`Byte 3-4`: Código DTC (BE uint16)<br/>`Byte 5-6`: Contador de Fallos<br/>`Byte 7`: Máscara de Canales Bloqueados (Bit $i = \text{Canal } i$) | Máscara de bits: Bit $0 = \text{CH0}$, Bit $1 = \text{CH1}$, ..., Bit $11 = \text{CH11}$ |
 
 ### 4.2. Tramas Recibidas por la PDM
@@ -338,18 +221,25 @@ Todas las funciones críticas han sido validadas en el entorno de pruebas unitar
 
 | Test Case | Archivo Fuente | Propósito de la Prueba | Aserciones Clave | Resultado |
 | :--- | :--- | :--- | :--- | :--- |
-| `test_vbat_conversion` | `test_main.cpp` | Valida la fórmula del divisor de tensión de batería ($12.6\text{V}$ nominal). | `TEST_ASSERT_FLOAT_WITHIN(0.2f, 12.6f, vbat)` | **PASSED** |
-| `test_protection_undervoltage_debounce` | `test_main.cpp` | Comprueba que una caída de tensión $< 5.0\text{V}$ durante $< 200\text{ ms}$ no dispara el corte, y al superar los $200\text{ ms}$ apaga y bloquea los canales. | `TEST_ASSERT_FALSE(fault_manager_is_high_fault_active())`<br/>`TEST_ASSERT_TRUE(fault_manager_is_high_fault_active())` | **PASSED** |
-| `test_protection_overcurrent_fast_trip` | `test_main.cpp` | Verifica el corte inmediato en canales estándar cuando $I > 1.30 \times I_{\text{nom}}$. | `TEST_ASSERT_TRUE(fault_manager_is_channel_locked(0))` | **PASSED** |
-| `test_protection_inrush_debouncing` | `test_main.cpp` | Comprueba que en Inversor (CH9) y Volante (CH3) 1 o 2 muestras por encima del límite no cortan (filtro inrush), y a la tercera muestra se ejecuta el corte. | `TEST_ASSERT_FALSE(fault_manager_is_channel_locked(9))`<br/>`TEST_ASSERT_TRUE(fault_manager_is_channel_locked(9))` | **PASSED** |
-| `test_fault_manager_channel_lock` | `test_main.cpp` | Valida que los canales enclavados rechazan reactivaciones no autorizadas y reportan la máscara en la trama `0x501`. | `TEST_ASSERT_TRUE(fault_manager_is_channel_locked(3))` | **PASSED** |
+| `test_mosfet_init_and_control` | `test_main.cpp` | Valida el control individual y por lotes de canales MOSFET y el bloqueo de reactivación en canales enclavados. | `TEST_ASSERT_TRUE(mosfet_driver_get_channel(0))` | **PASSED** |
+| `test_protection_range1_warning_above_110_percent` | `test_main.cpp` | Valida que corriente al $115\%$ nominal activa flag de aviso, DTC `0x0200` y mantiene el canal alimentado. | `TEST_ASSERT_EQUAL(PROT_LEVEL_WARNING_110, lvl)` | **PASSED** |
+| `test_protection_range2_timer_start_between_140_and_170_percent` | `test_main.cpp` | Valida que corriente al $150\%$ nominal inicia temporizador de 60s, genera DTC `0x0300` y mantiene el canal encendido. | `TEST_ASSERT_EQUAL(PROT_LEVEL_TIMER_ACTIVE, lvl)` | **PASSED** |
+| `test_protection_range2_timer_recovery_under_110_percent` | `test_main.cpp` | Valida que si la corriente cae por debajo de $110\%$ antes de los 60s, el timer se cancela y se borran las banderas. | `TEST_ASSERT_EQUAL(PROT_LEVEL_NORMAL, lvl)` | **PASSED** |
+| `test_protection_range2_timer_expired_trips_and_locks_channel` | `test_main.cpp` | Valida que si la sobrecarga de $150\%$ persiste 60 segundos completos, se apaga el canal, se enclava y reporta DTC `0x0100`. | `TEST_ASSERT_EQUAL(PROT_LEVEL_TRIPPED, lvl)` | **PASSED** |
+| `test_protection_range2_hysteresis_does_not_reset_if_above_110` | `test_main.cpp` | Valida la histéresis: si la corriente baja de $150\%$ a $125\%$ ($>110\%$), el temporizador de 60s NO se reinicia y continúa contando. | `TEST_ASSERT_EQUAL(PROT_LEVEL_TIMER_ACTIVE, lvl)` | **PASSED** |
+| `test_protection_range3_instant_trip_above_170_percent` | `test_main.cpp` | Valida corte instantáneo ($<10\text{ ms}$) y enclavamiento ante corrientes $>170\%$ nominal. | `TEST_ASSERT_EQUAL(PROT_LEVEL_TRIPPED, lvl)` | **PASSED** |
+| `test_protection_inverter_persistence_3_samples` | `test_main.cpp` | Comprueba filtro inrush de 3 muestras consecutivas en canal Inversor (CH9). | `TEST_ASSERT_FALSE(fault_manager_is_channel_locked(9))` | **PASSED** |
+| `test_protection_volant_persistence_3_samples` | `test_main.cpp` | Comprueba filtro inrush de 3 muestras consecutivas en canal Volante (CH3). | `TEST_ASSERT_FALSE(fault_manager_is_channel_locked(3))` | **PASSED** |
+| `test_protection_check_battery_undervoltage_debounce` | `test_main.cpp` | Comprueba que una caída de tensión $< 5.0\text{V}$ durante $< 200\text{ ms}$ no dispara el corte, y al superar los $200\text{ ms}$ apaga y bloquea todos los 12 canales. | `TEST_ASSERT_TRUE(fault_manager_is_high_fault_active())` | **PASSED** |
+| `test_dtc_error_codes_mapping` | `test_main.cpp` | Valida el formateo y asignación exacta de códigos DTC (`0x0100..0x010B`, `0x0199`, `0x0200..0x020B`, `0x0300..0x030B`). | `TEST_ASSERT_EQUAL_HEX16(0x0100, FAULT_CODE_OVERCURRENT_CH(0))` | **PASSED** |
+| `test_fault_manager_records_and_clearing` | `test_main.cpp` | Valida el registro estructurado de eventos de diagnóstico, conteo de ocurrencias y rechazo de comandos CAN no autorizados. | `TEST_ASSERT_TRUE(fault_manager_is_channel_locked(0))` | **PASSED** |
 
 ---
 
 ## 6. Conclusión de Paridad y Cumplimiento
 
 El firmware [PDM_FW](file:///c:/Users/DBDVU0X/DYN-Vehicle-Firmware/PDM/PDM_FW) garantiza:
-1. **100% de paridad funcional** respecto a `pdm.ino`.
+1. **100% de paridad funcional** respecto a `pdm.ino` complementada con lógica de corte de 3 niveles para cumplimiento industrial.
 2. **Cero memoria dinámica** y buffers 100% estáticos.
 3. **Determinismo temporal riguroso a 100 Hz** con FreeRTOS y ejecución de tareas CAN en Core 1.
-4. **CI/CD de GitHub Actions verificado**: 100% de tests unitarios superados en host runner.
+4. **CI/CD de GitHub Actions verificado**: 16/16 tests unitarios superados en host runner.

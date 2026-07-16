@@ -78,11 +78,11 @@ A continuación se contrastan las funciones originales de los tres firmwares con
 | Función Original (`.ino`) | Implementación Modular C (`PDM_FW`) | Propósito y Equivalencia Matemática | Mejora Industrial |
 | :--- | :--- | :--- | :--- |
 | `leerVoltajeBateria()` | `mux_adc_driver_read_vbat()` | Medición de batería LV con divisor $R_2 = 4047.62\ \Omega$, $R_3 = 1100.0\ \Omega$ ($V_{\text{bat}} = V_{\text{pin}} \times 4.6796$). | Sustitución de `analogRead` por `adc1_get_raw` nativo (conversión en $15\ \mu\text{s}$). |
-| `verificarProteccionBateria()` | `protection_check_battery()` | Corte general de todos los 12 canales MOSFET si $V_{\text{bat}} < 5.0\text{V}$ durante $> 200\text{ ms}$. | Integración con el gestor de fallos y emisión de diagnóstico en CAN ID `0x501`. |
+| `verificarProteccionBateria()` | `protection_check_battery()` | Corte general de todos los 12 canales MOSFET si $V_{\text{bat}} < 5.0\text{V}$ durante $> 200\text{ ms}$. | Integración con el gestor de fallos y emisión de diagnóstico en CAN ID `0x501` (DTC `0x0199`). |
 | `leerConsumoCargas()` | `protection_process_shunts_and_mux()` | Selección de 12 canales MUX CD74HC4067, promedio de 10 muestras y conversión $I = V_{\text{pin}} \times 1\ \text{A/V}$ ($R_{\text{shunt}} = 0.05\ \Omega, G = 20$). | Medición analógica optimizada sin bucles bloqueantes. |
-| `verificarProteccionConsumo()` | `protection_process_shunts_and_mux()` | Corte instantáneo si $I > 1.30 \times I_{\text{nom}}$. Debouncing de 3 muestras en canales inductivos (Inversor CH9 y Volante CH3). | Enclavamiento de canal en `fault_manager` que impide reactivaciones erróneas por CAN. |
+| `verificarProteccionConsumo()` | `protection_check_channel()` | Protección inteligente de 3 niveles: aviso preventivo al $>110\%$, timer de sobrecarga de 60s en rango $140\dots 170\%$, y corte ultrarrápido instantáneo si $I > 170\%$ (con debouncing inrush de 3 muestras en CH3 y CH9). | Enclavamiento permanente de canal en `fault_manager` que impide reactivaciones erróneas por CAN y reporte determinista de DTCs. |
 | `leerConsumoHall()` | `protection_process_hall_sensors()` | Medición de corriente en sensores Hall (Shutdown 10A y Fans 30A) con offset de $1.65\text{V}$. | Adquisición directa y conversión a miliamperios en punto fijo. |
-| `enviarConsumosCAN()` | `can_service_send_all_telemetry()` | Emisión a 10 Hz de estados de MOSFETs (IDs 1 y 2), corrientes (IDs 3..6), tensión LV y alerta de volante. | Tarea estática FreeRTOS fijada a Core 1 para no degradar el tiempo de cálculo de protecciones. |
+| `enviarConsumosCAN()` | `can_service_send_all_telemetry()` | Emisión a 10 Hz de estados de MOSFETs (IDs 1 y 2), corrientes (IDs 3..6), tensión LV, máscara de advertencia $>110\%$ y alerta de volante. | Tarea estática FreeRTOS fijada a Core 1 para no degradar el tiempo de cálculo de protecciones. |
 
 ---
 
@@ -90,22 +90,24 @@ A continuación se contrastan las funciones originales de los tres firmwares con
 
 Esta matriz describe **cada error posible** cubierto en la suite de firmwares, sus condiciones de activación, prioridades, reacciones físicas/lógicas del hardware y las tramas de diagnóstico emitidas por el bus CAN:
 
-| Placa | Código DTC | Nombre del Fallo | Cat. | Prio. | Condición de Disparo | Reacción Física y en Firmware | Desbloqueo / Reset | Trama CAN Emitida |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **ECU** | **`201`** | `FAULT_CODE_MOTOR_NTC_FAIL` | `HW` | `HIGH` | $\ge 3$ lecturas fallidas en NTC Motor (Canal 0 ADS8688). | Activa Failsafe Térmico: arranca ventilador Motor al 10% y escala +10%/s hasta 100% continuo. | Automática al restablecer lecturas válidas simultáneas. | ID `0x503` (DTC `201`, FanMotor=100%, FanInv=100%) |
-| **ECU** | **`202`** | `FAULT_CODE_INV_NTC_FAIL` | `HW` | `HIGH` | $\ge 3$ lecturas fallidas en NTC Inversor (Canal 7 ADS8688). | Activa Failsafe Térmico: fuerza ventilador Inversor al 100% mediante rampa de seguridad. | Automática tras lectura válida. | ID `0x503` (DTC `202`) |
-| **ECU** | **`203`** | `FAULT_CODE_ADS8688_SPI_ERR` | `HW` | `HIGH` | Fallo de comunicación SPI o respuesta inválida del ADC. | Invalida lecturas y fuerza ambos ventiladores al 100% de potencia. | Re-inicialización de bus SPI o reinicio de placa. | ID `0x503` (DTC `203`) |
-| **ECU** | **`204`** | `FAULT_CODE_TWAI_BUS_OFF` | `COMM` | `HIGH` | Bus CAN entra en estado `BUS_OFF`. | Llama a `twai_initiate_recovery()` y reinicia el periférico. | Automática al recuperar sincronismo CAN. | ID `0x503` tras recuperación |
-| **PDM** | **`10..21`** | `FAULT_CODE_OVERCURRENT_CH(0..11)` | `HW` | `HIGH` | Corriente en canal shunteado $i > 1.30 \times I_{\text{nom}}$ (instantáneo o 3 muestras en CH3/CH9). | Apaga el MOSFET del canal poniéndolo a `HIGH` (OFF), fuerza status a 0 y enclava el canal en `fault_manager`. Rechaza comandos de reactivación CAN. | Reinicio de placa o comando explícito si cesó la sobrecorriente. | IDs `0x001`/`0x002` (Status=0), ID `0x501` (DTC $10+i$, Mask=Canal Bloqueado) |
-| **PDM** | **`100`** | `FAULT_CODE_VBAT_UNDERVOLTAGE` | `HW` | `HIGH` | Tensión de batería $V_{\text{bat}} < 5.0\text{V}$ durante $> 200\text{ ms}$. | Apaga **todos los 12 canales MOSFET** simultáneamente para proteger las celdas contra sobredescarga. | Automática al restablecerse tensión $> 5.0\text{V}$. | IDs `0x001`/`0x002` (Todos 0), ID `0x006` ($V_{\text{bat}}$), ID `0x501` (DTC `100`) |
-| **PDM** | **`1`** | `FAULT_CODE_CAN_ERROR_PASSIVE` | `COMM` | `LOW` | Alerta TWAI `ERR_PASS` activada por degradación de bus. | Registro de diagnóstico interno y notificación telemétrica. | Automática al disminuir errores de trama. | ID `0x501` (DTC `1`) |
-| **PDM** | **`2`** | `FAULT_CODE_CAN_BUS_OFF` | `COMM` | `HIGH` | Errores en bus CAN superan 50 o estado `BUS_OFF`. | Inicia autorrecuperación del bus CAN. | Automática al recuperar el bus. | ID `0x501` tras recuperación |
-| **MCU** | **`101`** | `FAULT_CODE_APPS_IMPLAUSIBLE` | `HW` | `HIGH` | Discrepancia $> 10\%$ entre APPS1 y APPS2 durante $> 100\text{ ms}$. | Corta el par motor a $0.0\text{ Nm}$ inmediatamente, enclava subsistema APPS e inhabilita comando al inversor. | Automática cuando la discrepancia es $< 10\%$. | ID `0x502` (DTC `101`, Mask=APPS Locked) |
-| **MCU** | **`102`** | `FAULT_CODE_APPS_WIRE_BREAK` | `HW` | `HIGH` | Tensión analógica APPS fuera del $\pm 15\%$ del rango calibrado. | Corta el par a $0.0\text{ Nm}$ inmediatamente y bloquea tracción. | Restablecimiento de tensión válida. | ID `0x502` (DTC `102`) |
-| **MCU** | **`103`** | `FAULT_CODE_BRAKE_SENSOR_ERR` | `HW` | `HIGH` | Sensor de freno HPS desconectado o valor fuera de rango ($< 50$ o $> 4000$). | Enclava frenos, bloquea entrada a R2D y limita el par. | Restablecimiento de señal analógica válida. | ID `0x502` (DTC `103`, Mask=Brakes Locked) |
-| **MCU** | **`104`** | `FAULT_CODE_TWAI_BUS_OFF` | `COMM` | `HIGH` | Bus CAN hacia Inversor o Car CAN en estado `BUS_OFF`. | Inicia autorrecuperación y comanda $0.0\text{ Nm}$ de par. | Automática tras recuperar el bus diferencial. | ID `0x502` tras recuperación |
-| **MCU** | **`105`** | `FAULT_CODE_BMS_SAG_LIMIT` | `RES` | `LOW` | Tensión de celda cae cerca del límite durante aceleración. | Derating dinámico de par mediante estimador de resistencia interna $R_{\text{int}}$. | Dinámica según tensión OCV. | ID `0x502` (DTC `105`) |
-| **MCU** | **`106`** | `FAULT_CODE_BSPD_TRIPPED` | `HW` | `HIGH` | Acelerador $> 25\%$ con freno accionado ($> 100$ ADC). | Corta instantáneamente el par a $0.0\text{ Nm}$ (interbloqueo FS). | Se desbloquea únicamente al bajar el acelerador a $< 5\%$. | ID `0x502` (DTC `106`) |
+| Placa | Código DTC (Hex) | Nombre del Fallo | Cat. | Prio. | Condición de Disparo | Reacción Física y en Firmware | Desbloqueo / Reset | Trama CAN Emitida |
+| :--- | :---: | :--- | :---: | :---: | :--- | :--- | :--- | :--- |
+| **ECU** | **`0x00C9`** | `FAULT_CODE_MOTOR_NTC_FAIL` | `HW` | `HIGH` | $\ge 3$ lecturas fallidas en NTC Motor (Canal 0 ADS8688). | Activa Failsafe Térmico: arranca ventilador Motor al 10% y escala +10%/s hasta 100% continuo. | Automática al restablecer lecturas válidas simultáneas. | ID `0x503` (DTC `0x00C9`, FanMotor=100%, FanInv=100%) |
+| **ECU** | **`0x00CA`** | `FAULT_CODE_INV_NTC_FAIL` | `HW` | `HIGH` | $\ge 3$ lecturas fallidas en NTC Inversor (Canal 7 ADS8688). | Activa Failsafe Térmico: fuerza ventilador Inversor al 100% mediante rampa de seguridad. | Automática tras lectura válida. | ID `0x503` (DTC `0x00CA`) |
+| **ECU** | **`0x00CB`** | `FAULT_CODE_ADS8688_SPI_ERR` | `HW` | `HIGH` | Fallo de comunicación SPI o respuesta inválida del ADC. | Invalida lecturas y fuerza ambos ventiladores al 100% de potencia. | Re-inicialización de bus SPI o reinicio de placa. | ID `0x503` (DTC `0x00CB`) |
+| **ECU** | **`0x00CC`** | `FAULT_CODE_TWAI_BUS_OFF` | `COMM` | `HIGH` | Bus CAN entra en estado `BUS_OFF`. | Llama a `twai_initiate_recovery()` y reinicia el periférico. | Automática al recuperar sincronismo CAN. | ID `0x503` tras recuperación |
+| **PDM** | **`0x0100` $\dots$ `0x010B`** | `FAULT_CODE_OVERCURRENT_CH0..11` | `HW` | `HIGH` | Corriente en canal shunteado $i > 170\% I_{\text{nom}}$ o sobrecarga $140\dots 170\%$ persistente durante $\ge 60\text{s}$ (3 muestras en CH3/CH9). | Apaga el MOSFET del canal poniéndolo a `HIGH` (OFF), fuerza status a 0 y enclava el canal en `fault_manager`. Rechaza comandos de reactivación CAN. | Reinicio de placa o comando explícito si cesó la sobrecorriente. | IDs `0x001`/`0x002` (Status=0), ID `0x501` (DTC `0x0100 + i`, Mask=Canal Bloqueado) |
+| **PDM** | **`0x0199`** | `FAULT_CODE_VBAT_UNDERVOLTAGE` | `HW` | `HIGH` | Tensión de batería $V_{\text{bat}} < 5.0\text{V}$ durante $> 200\text{ ms}$. | Apaga **todos los 12 canales MOSFET** simultáneamente para proteger las celdas contra sobredescarga profunda; bloquea todos los canales (`0x0FFF`). | Automática al restablecerse tensión $> 5.0\text{V}$. | IDs `0x001`/`0x002` (Todos 0), ID `0x006` ($V_{\text{bat}}$), ID `0x501` (DTC `0x0199`) |
+| **PDM** | **`0x0200` $\dots$ `0x020B`** | `FAULT_CODE_WARN_OVERCURRENT_110_CH0..11` | `HW` | `LOW` | Corriente en canal $i$ dentro del rango de aviso ($110\% < I < 140\%$). | Activa bit $i$ en la Máscara de Aviso (CAN ID 6, byte 7). El canal permanece activo. | Automática al descender la corriente a $I \le 110\%$. | ID `0x006` (Byte 7 máscara), ID `0x501` (DTC `0x0200 + i`) |
+| **PDM** | **`0x0300` $\dots$ `0x030B`** | `FAULT_CODE_WARN_OVERCURRENT_60S_CH0..11` | `HW` | `LOW` | Corriente en canal $i$ en rango de sobrecarga ($140\% \le I \le 170\%$). | Inicia temporizador de 60s; el canal permanece alimentado temporalmente. | Automática si $I \le 110\%$ antes de expirar el timer. | ID `0x501` (DTC `0x0300 + i`) |
+| **PDM** | **`0x0401`** | `FAULT_CODE_CAN_PASSIVE_ERROR` | `COMM` | `LOW` | Alerta TWAI `ERR_PASS` activada por degradación de bus. | Registro de diagnóstico interno y notificación telemétrica. | Automática al disminuir errores de trama. | ID `0x501` (DTC `0x0401`) |
+| **PDM** | **`0x0402`** | `FAULT_CODE_CAN_BUS_OFF` | `COMM` | `HIGH` | Errores en bus CAN superan 50 o estado `BUS_OFF`. | Inicia autorrecuperación del bus CAN. | Automática al recuperar el bus. | ID `0x501` tras recuperación |
+| **MCU** | **`0x0065`** | `FAULT_CODE_APPS_IMPLAUSIBLE` | `HW` | `HIGH` | Discrepancia $> 10\%$ entre APPS1 y APPS2 durante $> 100\text{ ms}$. | Corta el par motor a $0.0\text{ Nm}$ inmediatamente, enclava subsistema APPS e inhabilita comando al inversor. | Automática cuando la discrepancia es $< 10\%$. | ID `0x502` (DTC `0x0065`, Mask=APPS Locked) |
+| **MCU** | **`0x0066`** | `FAULT_CODE_APPS_WIRE_BREAK` | `HW` | `HIGH` | Tensión analógica APPS fuera del $\pm 15\%$ del rango calibrado. | Corta el par a $0.0\text{ Nm}$ inmediatamente y bloquea tracción. | Restablecimiento de tensión válida. | ID `0x502` (DTC `0x0066`) |
+| **MCU** | **`0x0067`** | `FAULT_CODE_BRAKE_SENSOR_ERR` | `HW` | `HIGH` | Sensor de freno HPS desconectado o valor fuera de rango ($< 50$ o $> 4000$). | Enclava frenos, bloquea entrada a R2D y limita el par. | Restablecimiento de señal analógica válida. | ID `0x502` (DTC `0x0067`, Mask=Brakes Locked) |
+| **MCU** | **`0x0068`** | `FAULT_CODE_TWAI_BUS_OFF` | `COMM` | `HIGH` | Bus CAN hacia Inversor o Car CAN en estado `BUS_OFF`. | Inicia autorrecuperación y comanda $0.0\text{ Nm}$ de par. | Automática tras recuperar el bus diferencial. | ID `0x502` tras recuperación |
+| **MCU** | **`0x0069`** | `FAULT_CODE_BMS_SAG_LIMIT` | `RES` | `LOW` | Tensión de celda cae cerca del límite durante aceleración. | Derating dinámico de par mediante estimador de resistencia interna $R_{\text{int}}$. | Dinámica según tensión OCV. | ID `0x502` (DTC `0x0069`) |
+| **MCU** | **`0x006A`** | `FAULT_CODE_BSPD_TRIPPED` | `HW` | `HIGH` | Acelerador $> 25\%$ con freno accionado ($> 100$ ADC). | Corta instantáneamente el par a $0.0\text{ Nm}$ (interbloqueo FS). | Se desbloquea únicamente al bajar el acelerador a $< 5\%$. | ID `0x502` (DTC `0x006A`) |
 
 ---
 
@@ -120,8 +122,8 @@ A continuación se muestra el mapa completo de tramas que circulan por el bus CA
 | **`0x003`** | `PDM_CURRENTS_0_3` | **PDM** | Telemetría, Data Logger, MCU | 8 | 10 Hz | Corrientes de canales 0 a 3 (LE uint16 mA). |
 | **`0x004`** | `PDM_CURRENTS_4_7` | **PDM** | Telemetría, Data Logger, MCU | 8 | 10 Hz | Corrientes de canales 4 a 7 (LE uint16 mA). |
 | **`0x005`** | `PDM_CURRENTS_8_11` | **PDM** | Telemetría, Data Logger, MCU | 8 | 10 Hz | Corrientes de canales 8 a 11 (LE uint16 mA). |
-| **`0x006`** | `PDM_CURRENTS_HALL_VBAT` | **PDM** | Telemetría, Data Logger, MCU | 8 | 10 Hz | Hall SD (mA), Hall Fans (mA), $V_{\text{bat}}$ LV (mV) y Alerta Volante. |
-| **`0x020`** | `MCU_WHEEL_SPEEDS` | **MCU** | Dashboard, Telemetría, Logger | 8 | 100 Hz | RPM de ruedas FL, FR, RL, RR (BE uint16 RPM). |
+| **`0x006`** | `PDM_CURRENTS_HALL_VBAT` | **PDM** | Telemetría, Data Logger, MCU | 8 | 10 Hz | Hall SD (mA), Hall Fans (mA), $V_{\text{bat}}$ LV (mV), Alerta Volante y Máscara de Aviso $>110\%$. |
+| **`0x020`** | `MCU_WHEEL_SPEEDS` | **MCU** | Dashboard, Telemetry, Logger | 8 | 100 Hz | RPM de ruedas FL, FR, RL, RR (BE uint16 RPM). |
 | **`0x021`** | `MCU_VEHICLE_STATE` | **MCU** | Dashboard, ECU, PDM, Telemetría | 8 | 100 Hz | Ángulo dirección, presiones de freno, estado R2D ($4 = \text{R2D}$) y par demandado. |
 | **`0x0C0`** | `INVERTER_TORQUE_CMD` | **MCU** | Inversor Unitek Bamocar | 8 | 100 Hz | Registro de par `0x90` y valor comandado ($0..32767$). |
 | **`0x100`** | `MANUAL_MOSFET_CMD` | **Volante** | PDM | 2 | On-Event | Canal MOSFET ($0..11$) y comando ($1 = \text{ON}, 0 = \text{OFF}$). |
@@ -149,12 +151,23 @@ test/test_main.cpp:92: test_fault_manager_failsafe_escalation [PASSED]
 ----------------------- 5 Tests 0 Failures 0 Ignored (PASSED) ------------------
 
 PDM_FW Unity Test Suite:
-test/test_main.cpp:95: test_vbat_conversion                   [PASSED]
-test/test_main.cpp:96: test_protection_undervoltage_debounce  [PASSED]
-test/test_main.cpp:97: test_protection_overcurrent_fast_trip  [PASSED]
-test/test_main.cpp:98: test_protection_inrush_debouncing      [PASSED]
-test/test_main.cpp:99: test_fault_manager_channel_lock        [PASSED]
------------------------ 5 Tests 0 Failures 0 Ignored (PASSED) ------------------
+test/test_main.cpp:295: test_mosfet_init_and_control                                      [PASSED]
+test/test_main.cpp:296: test_protection_range1_warning_above_110_percent                  [PASSED]
+test/test_main.cpp:297: test_protection_range2_timer_start_between_140_and_170_percent     [PASSED]
+test/test_main.cpp:298: test_protection_range2_timer_recovery_under_110_percent           [PASSED]
+test/test_main.cpp:299: test_protection_range2_timer_expired_trips_and_locks_channel      [PASSED]
+test/test_main.cpp:300: test_protection_range2_hysteresis_does_not_reset_if_above_110     [PASSED]
+test/test_main.cpp:301: test_protection_range3_instant_trip_above_170_percent             [PASSED]
+test/test_main.cpp:302: test_protection_check_channel_instant_wrapper                     [PASSED]
+test/test_main.cpp:303: test_protection_warning_and_timer_masks                           [PASSED]
+test/test_main.cpp:304: test_protection_inverter_persistence_3_samples                    [PASSED]
+test/test_main.cpp:305: test_protection_volant_persistence_3_samples                      [PASSED]
+test/test_main.cpp:306: test_protection_persistence_reset_on_recovery                     [PASSED]
+test/test_main.cpp:307: test_protection_check_battery_undervoltage_debounce               [PASSED]
+test/test_main.cpp:308: test_protection_process_shunts_and_mux_and_hall                   [PASSED]
+test/test_main.cpp:309: test_dtc_error_codes_mapping                                      [PASSED]
+test/test_main.cpp:310: test_fault_manager_records_and_clearing                           [PASSED]
+----------------------- 16 Tests 0 Failures 0 Ignored (PASSED) -----------------
 
 MCU_FW Unity Test Suite:
 test/test_main.cpp:95: test_apps_calibration_and_deadband     [PASSED]
