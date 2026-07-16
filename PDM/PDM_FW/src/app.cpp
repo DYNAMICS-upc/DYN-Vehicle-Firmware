@@ -30,8 +30,8 @@ void app_run(void) {
         // 1. Verificación de subtensión de batería con debounce de 200ms
         protection_check_battery(&s_v_bat_actual, current_time_ms);
 
-        // 2. Procesamiento de los 12 canales MUX con promedio de 10 muestras y fusible rápido
-        protection_process_shunts_and_mux(s_consumos_can);
+        // 2. Procesamiento de los 12 canales MUX con promedio de 10 muestras y fusible escalonado
+        protection_process_shunts_and_mux(s_consumos_can, current_time_ms);
 
         // 3. Procesamiento de sensores Hall (Shutdown y Ventiladores)
         protection_process_hall_sensors(s_consumos_can);

@@ -2,6 +2,7 @@
 #include "fault_manager.h"
 #include "ota_service.h"
 #include "mosfet_driver.h"
+#include "protection.h"
 #include <string.h>
 
 #if defined(ESP_PLATFORM)
@@ -122,7 +123,7 @@ void can_service_send_all_telemetry(const uint8_t *mosfets_status, const uint16_
             // Carga 4 (Volant+Dashes) corresponde al índice 3 (> 2500 mA)
             uint8_t alerta_carga4 = (consumos_can[3] > 2500) ? 1 : 0;
             msg.data[6] = alerta_carga4 & 0xFF;
-            msg.data[7] = 0; // Reserved
+            msg.data[7] = (uint8_t)(protection_get_warning_mask() & 0xFF); // Máscara de sobrecorriente (>110%)
         }
 
         twai_transmit(&msg, pdMS_TO_TICKS(10));
