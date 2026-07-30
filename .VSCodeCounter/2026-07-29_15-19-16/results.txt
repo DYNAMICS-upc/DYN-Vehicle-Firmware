@@ -1,0 +1,61 @@
+Date : 2026-07-29 15:19:16
+Directory : c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU
+Total : 23 files,  492 codes, 22 comments, 133 blanks, all 647 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C        |          9 |        240 |         15 |         58 |        313 |
+| C++      |         13 |        239 |          7 |         73 |        319 |
+| Ini      |          1 |         13 |          0 |          2 |         15 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                  | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                     |         23 |        492 |         22 |        133 |        647 |
+| MCU_FW                                                                                |         23 |        492 |         22 |        133 |        647 |
+| MCU_FW (Files)                                                                        |          1 |         13 |          0 |          2 |         15 |
+| MCU_FW\lib                                                                            |         18 |        381 |         16 |        102 |        499 |
+| MCU_FW\lib\apps_driver                                                                |          2 |         73 |          2 |         15 |         90 |
+| MCU_FW\lib\brake_driver                                                               |          2 |         43 |          1 |         11 |         55 |
+| MCU_FW\lib\can_car_driver                                                             |          2 |         47 |          2 |         12 |         61 |
+| MCU_FW\lib\control_algorithms                                                         |          6 |        124 |         11 |         37 |        172 |
+| MCU_FW\lib\ipc_manager                                                                |          2 |         32 |          0 |         10 |         42 |
+| MCU_FW\lib\shared_state                                                               |          2 |         42 |          0 |         10 |         52 |
+| MCU_FW\lib\utils                                                                      |          2 |         20 |          0 |          7 |         27 |
+| MCU_FW\src                                                                            |          3 |         75 |          6 |         24 |        105 |
+| MCU_FW\test                                                                           |          1 |         23 |          0 |          5 |         28 |
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                              | language | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\apps_driver\apps_driver.c        | C        |         59 |          1 |          9 |         69 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\apps_driver\apps_driver.h        | C++      |         14 |          1 |          6 |         21 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\brake_driver\brake_driver.c      | C        |         32 |          1 |          7 |         40 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\brake_driver\brake_driver.h      | C++      |         11 |          0 |          4 |         15 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\can_car_driver\can_car_driver.c  | C        |         18 |          2 |          6 |         26 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\can_car_driver\can_car_driver.h  | C++      |         29 |          0 |          6 |         35 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\launch_ctrl.c | C        |         20 |          5 |          7 |         32 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\launch_ctrl.h | C++      |         11 |          0 |          5 |         16 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\r2d_manager.c | C        |         42 |          3 |          6 |         51 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\r2d_manager.h | C++      |         19 |          0 |          5 |         24 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\torque_ctrl.c | C        |         21 |          3 |         10 |         34 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\control_algorithms\torque_ctrl.h | C++      |         11 |          0 |          4 |         15 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\ipc_manager\ipc_manager.c        | C        |         15 |          0 |          5 |         20 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\ipc_manager\ipc_manager.h        | C++      |         17 |          0 |          5 |         22 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\shared_state\shared_state.c      | C        |         23 |          0 |          5 |         28 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\shared_state\shared_state.h      | C++      |         19 |          0 |          5 |         24 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\utils\math_utils.c               | C        |         10 |          0 |          3 |         13 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\lib\utils\math_utils.h               | C++      |         10 |          0 |          4 |         14 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\platformio.ini                       | Ini      |         13 |          0 |          2 |         15 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\src\app.cpp                          | C++      |         61 |          6 |         18 |         85 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\src\app.h                            | C++      |          9 |          0 |          4 |         13 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\src\main.cpp                         | C++      |          5 |          0 |          2 |          7 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\MCU\MCU_FW\test\test_main.cpp                   | C++      |         23 |          0 |          5 |         28 |
+| Total                                                                                 |          |        492 |         22 |        133 |        647 |
++---------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

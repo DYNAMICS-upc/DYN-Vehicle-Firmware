@@ -1,0 +1,53 @@
+Date : 2026-07-29 15:19:08
+Directory : c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM
+Total : 16 files,  493 codes, 24 comments, 104 blanks, all 621 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C        |          5 |        268 |         14 |         45 |        327 |
+| C++      |         10 |        212 |         10 |         57 |        279 |
+| Ini      |          1 |         13 |          0 |          2 |         15 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                 | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                    |         16 |        493 |         24 |        104 |        621 |
+| PDM_FW                                                                               |         16 |        493 |         24 |        104 |        621 |
+| PDM_FW (Files)                                                                       |          1 |         13 |          0 |          2 |         15 |
+| PDM_FW\include                                                                       |          1 |         11 |          2 |          3 |         16 |
+| PDM_FW\lib                                                                           |         10 |        341 |         16 |         72 |        429 |
+| PDM_FW\lib\can_service                                                               |          2 |         63 |          6 |         11 |         80 |
+| PDM_FW\lib\ipc_manager                                                               |          2 |         62 |          0 |         17 |         79 |
+| PDM_FW\lib\mosfet_driver                                                             |          2 |         93 |          2 |         14 |        109 |
+| PDM_FW\lib\mux_adc_driver                                                            |          2 |         71 |          1 |         13 |         85 |
+| PDM_FW\lib\protection                                                                |          2 |         52 |          7 |         17 |         76 |
+| PDM_FW\src                                                                           |          3 |        108 |          6 |         22 |        136 |
+| PDM_FW\test                                                                          |          1 |         20 |          0 |          5 |         25 |
++--------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                             | language | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\include\pdm_config.h                | C++      |         11 |          2 |          3 |         16 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\can_service\can_service.c       | C        |         53 |          6 |          7 |         66 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\can_service\can_service.h       | C++      |         10 |          0 |          4 |         14 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\ipc_manager\ipc.c               | C        |         40 |          0 |          9 |         49 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\ipc_manager\ipc.h               | C++      |         22 |          0 |          8 |         30 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\mosfet_driver\mosfet_driver.c   | C        |         77 |          1 |          8 |         86 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\mosfet_driver\mosfet_driver.h   | C++      |         16 |          1 |          6 |         23 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\mux_adc_driver\mux_adc_driver.c | C        |         59 |          1 |          9 |         69 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\mux_adc_driver\mux_adc_driver.h | C++      |         12 |          0 |          4 |         16 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\protection\protection.c         | C        |         39 |          6 |         12 |         57 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\lib\protection\protection.h         | C++      |         13 |          1 |          5 |         19 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\platformio.ini                      | Ini      |         13 |          0 |          2 |         15 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\src\app.cpp                         | C++      |         94 |          6 |         16 |        116 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\src\app.h                           | C++      |          9 |          0 |          4 |         13 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\src\main.cpp                        | C++      |          5 |          0 |          2 |          7 |
+| c:\Users\DBDVU0X\DYN-Vehicle-Firmware\PDM\PDM_FW\test\test_main.cpp                  | C++      |         20 |          0 |          5 |         25 |
+| Total                                                                                |          |        493 |         24 |        104 |        621 |
++--------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
