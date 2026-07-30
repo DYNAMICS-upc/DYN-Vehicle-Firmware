@@ -1,6 +1,12 @@
 #include "r2d_manager.h"
+#if defined(ESP_PLATFORM)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#else
+uint32_t mock_tick = 0;
+#define xTaskGetTickCount() (mock_tick)
+#define pdMS_TO_TICKS(ms) (ms)
+#endif
 
 static r2d_state_t s_state = R2D_STATE_OFF;
 static uint32_t s_sound_start_time = 0;

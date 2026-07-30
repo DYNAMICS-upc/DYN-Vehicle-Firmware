@@ -58,23 +58,32 @@ void mosfet_driver_set(bool state) {
 #endif
 }
 
+static uint8_t s_fault_counter = 0;
+#define FAULT_FILTER_LIMIT 5
+
 bool mosfet_driver_check_fault(void) {
 #if defined(ESP_PLATFORM)
     int current = 0;
     adc_oneshot_read(s_adc1_handle, ADC_CHANNEL_6, &current);
-    if (current > MAX_CURRENT_THRESHOLD) {
-        gpio_set_level((gpio_num_t)s_ctrl_pin, 0); // Force off on fault
-        return true; // Fault detected
-    }
-    return false;
 #else
     int current = analogRead(s_sense_pin);
-    if (current > MAX_CURRENT_THRESHOLD) {
-        digitalWrite(s_ctrl_pin, 0); // Force off on fault
-        return true; // Fault detected
-    }
-    return false;
 #endif
+
+    if (current > MAX_CURRENT_THRESHOLD) {
+        s_fault_counter++;
+        if (s_fault_counter >= FAULT_FILTER_LIMIT) {
+#if defined(ESP_PLATFORM)
+            gpio_set_level((gpio_num_t)s_ctrl_pin, 0); // Force off on fault
+#else
+            digitalWrite(s_ctrl_pin, 0); // Force off on fault
+#endif
+            return true; // Fault detected
+        }
+        return false; // Soft-start tolerance
+    }
+    
+    s_fault_counter = 0;
+    return false;
 }
 
 void mosfet_driver_update(void) {

@@ -21,14 +21,22 @@ void test_apps_implausible(void) {
     TEST_ASSERT_FALSE(apps_driver_read(&val));
 }
 
+extern "C" uint32_t mock_tick;
+
 void test_r2d_transition(void) {
     r2d_manager_init();
-    // Fail case: missing button
-    r2d_manager_update(true, true, false);
-    TEST_ASSERT_NOT_EQUAL(R2D_STATE_READY, r2d_manager_get_state());
     
-    // Success case: all conditions met
-    r2d_manager_update(true, true, true);
+    r2d_manager_update(true, false, false); // OFF -> WAITING_BRAKE
+    TEST_ASSERT_EQUAL(R2D_STATE_WAITING_BRAKE, r2d_manager_get_state());
+    
+    r2d_manager_update(true, true, false); // WAITING_BRAKE -> WAITING_BUTTON
+    TEST_ASSERT_EQUAL(R2D_STATE_WAITING_BUTTON, r2d_manager_get_state());
+    
+    r2d_manager_update(true, true, true); // WAITING_BUTTON -> SOUNDING
+    TEST_ASSERT_EQUAL(R2D_STATE_SOUNDING, r2d_manager_get_state());
+    
+    mock_tick = 2500; // pass 2 seconds
+    r2d_manager_update(true, true, false); // SOUNDING -> READY
     TEST_ASSERT_EQUAL(R2D_STATE_READY, r2d_manager_get_state());
 }
 

@@ -13,6 +13,9 @@ void test_mosfet_no_fault(void) {
 
 void test_mosfet_fault(void) {
     mosfet_driver_set_mock_current(900); // Exceeds 800
+    for(int i = 0; i < 4; i++) {
+        mosfet_driver_check_fault();
+    }
     TEST_ASSERT_TRUE(mosfet_driver_check_fault());
 }
 
